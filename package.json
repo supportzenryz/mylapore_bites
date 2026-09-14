@@ -28,10 +28,13 @@
     "verify": "pnpm typecheck && pnpm test:unit",
     "mock:api": "tsx tools/mock-api/server.ts",
     "test:e2e:cart": "node tests/e2e/cart-flow.mjs",
-    "test:visual": "node tests/e2e/visual-check.mjs"
+    "test:visual": "node tests/e2e/visual-check.mjs",
+    "dev:mock": "concurrently -n mock,web -c green,cyan \"pnpm mock:api\" \"pnpm --filter @mb/storefront dev\"",
+    "dev:full": "concurrently -n api,worker,web,admin -c green,yellow,cyan,magenta \"pnpm api:dev\" \"pnpm worker:dev\" \"pnpm --filter @mb/storefront dev\" \"pnpm --filter @mb/admin dev\""
   },
   "devDependencies": {
     "@types/node": "^22.10.2",
+    "concurrently": "^10.0.5",
     "pg": "^8.13.1",
     "playwright": "^1.63.0",
     "prettier": "^3.4.2",

@@ -77,6 +77,12 @@ shapes as the real API, reading the **seed catalogue directly** so it cannot
 drift from real data. Useful for UI work and for CI visual checks.
 
 ```bash
+pnpm dev:mock        # mock API + storefront, one command
+```
+
+Or separately, if you prefer two terminals:
+
+```bash
 pnpm mock:api                           # terminal 1
 pnpm --filter @mb/storefront dev        # terminal 2
 ```
@@ -115,6 +121,8 @@ curl -s localhost:4000/v1/auth/otp/verify \
 | `pnpm test:e2e:cart` | Cart flow in a real browser — needs the storefront running |
 | `pnpm test:visual` | Screenshots every page at 390px and desktop, checks for overflow |
 | `pnpm mock:api` | Dev-only API on :4000 serving seed data, no database needed |
+| `pnpm dev:mock` | Mock API + storefront together — the no-database path |
+| `pnpm dev:full` | API + worker + storefront + admin — needs Postgres and Redis |
 | `pnpm verify` | Typecheck + unit tests |
 | `pnpm db:migrate` / `db:seed` / `db:reset` / `db:studio` | Database |
 | `pnpm infra:up` / `infra:down` | Local Postgres, Redis, MinIO |
