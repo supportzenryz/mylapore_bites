@@ -1,0 +1,1690 @@
+// ===========================================================================
+// Mylapore Bites — database schema
+//
+// Organising principle: this is a FRESH PRE-ORDER business. An order is a
+// reservation against a future day's production capacity, not a claim on
+// stock. `ProductionCapacity` + `CapacityReservation` are therefore the
+// centre of this schema, not an add-on to a conventional catalogue.
+//
+// Conventions
+//   - Table names: plural snake_case  (`orders`, not `order` — reserved word)
+//   - Money: Decimal(12,2) + explicit currency. Never Float.
+//   - Timestamps: timestamptz (UTC). Business dates: DATE, read in the
+//     market's timezone.
+//   - Soft delete via `deletedAt` on catalogue/config tables only.
+//   - Market never branches code. It is a foreign key on rows that differ.
+// ===========================================================================
+
+generator client {
+  provider     = "prisma-client"
+  output       = "../src/generated/prisma"
+  runtime      = "nodejs"
+  moduleFormat = "cjs"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ===========================================================================
+// ENUMS
+// ===========================================================================
+
+/// How a product comes into existence. Drives whether capacity is reserved.
+enum StockMode {
+  STOCKED /// Sold from finished inventory. No capacity reservation.
+  FRESH_PREORDER /// Made to order. Reserves production capacity.
+  LIMITED_DAILY /// Made daily up to a cap. No carry-forward.
+  PREORDER_ONLY /// Seasonal/festival item with an explicit window.
+}
+
+enum CapacityStatus {
+  OPEN
+  LOCKED /// Cut-off passed; plan generated. No new reservations.
+  CLOSED /// Production done or day finished.
+}
+
+enum ReservationStatus {
+  HELD /// Soft hold with TTL, created at delivery-date selection.
+  CONFIRMED /// Payment verified.
+  CONSUMED /// Production batch completed.
+  RELEASED /// TTL expiry, payment failure or cancellation.
+}
+
+enum ProductionPlanStatus {
+  PLANNED
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
+enum ProductionBatchStatus {
+  PLANNED
+  IN_PROGRESS
+  READY
+  QUALITY_CHECK
+  COMPLETED
+  CANCELLED
+}
+
+enum OrderStatus {
+  PENDING
+  CONFIRMED
+  PROCESSING
+  PRODUCTION
+  READY
+  PACKED
+  OUT_FOR_DELIVERY
+  DELIVERED
+  CANCELLED
+  REFUNDED
+}
+
+enum PaymentStatus {
+  PENDING
+  AUTHORIZED
+  PAID
+  FAILED
+  REFUNDED
+  PARTIALLY_REFUNDED
+}
+
+enum ProductionStatus {
+  NOT_REQUIRED
+  PENDING
+  IN_PROGRESS
+  COMPLETED
+  SHORT /// Under-produced. Order manager must act.
+}
+
+/// Deliberately separate from OrderStatus. Collapsing the four status
+/// columns into one enum is the modelling mistake that forces a rewrite.
+enum FulfilmentStatus {
+  WAITING
+  PICKING
+  PACKING
+  QUALITY_CHECK
+  PACKED
+  ASSIGNED
+  OUT_FOR_DELIVERY
+  DELIVERED
+  FAILED_DELIVERY
+  RESCHEDULED
+}
+
+enum CartStatus {
+  ACTIVE
+  CONVERTED
+  ABANDONED
+}
+
+enum AddressType {
+  HOME
+  WORK
+  OTHER
+}
+
+enum InventoryItemType {
+  FINISHED_GOOD
+  INGREDIENT
+  PACKAGING
+}
+
+enum InventoryMovementReason {
+  PURCHASE
+  PRODUCTION_IN
+  PRODUCTION_CONSUME
+  SALE
+  WASTAGE
+  ADJUSTMENT
+  RETURN
+}
+
+enum NotificationChannel {
+  WHATSAPP
+  SMS
+  EMAIL
+}
+
+enum NotificationStatus {
+  PENDING
+  SENT
+  DELIVERED
+  FAILED
+  CANCELLED
+}
+
+enum OtpPurpose {
+  LOGIN
+  PHONE_CHANGE
+}
+
+enum OtpChannel {
+  WHATSAPP
+  SMS
+}
+
+enum ReviewStatus {
+  PENDING
+  APPROVED
+  HIDDEN
+  REJECTED
+}
+
+enum DiscountType {
+  PERCENTAGE
+  FIXED_AMOUNT
+  FREE_DELIVERY
+}
+
+enum ImportJobStatus {
+  PENDING
+  VALIDATING
+  PREVIEW_READY
+  IMPORTING
+  COMPLETED
+  FAILED
+}
+
+enum PaymentProviderKind {
+  RAZORPAY
+  STRIPE
+  MANUAL
+}
+
+// ===========================================================================
+// MARKET  —  one platform, many countries
+// ===========================================================================
+
+model Market {
+  id                 String  @id @default(uuid(7))
+  code               String  @unique /// "IN", "UK"
+  name               String
+  currency           String  @db.Char(3) /// ISO-4217
+  currencySymbol     String  @default("")
+  locale             String  @default("en")
+  timezone           String /// IANA, e.g. "Asia/Kolkata"
+  phoneCountryCode   String /// "+91"
+  paymentProvider    PaymentProviderKind @default(RAZORPAY)
+  /// How far ahead customers may book. Drives the availability horizon.
+  orderHorizonDays   Int     @default(21)
+  /// Prices shown tax-inclusive (India GST) or exclusive (UK trade).
+  pricesIncludeTax   Boolean @default(true)
+  defaultWarehouseId String?
+  isActive           Boolean @default(true)
+
+  createdAt DateTime  @default(now()) @db.Timestamptz(6)
+  updatedAt DateTime  @updatedAt @db.Timestamptz(6)
+  deletedAt DateTime? @db.Timestamptz(6)
+
+  defaultWarehouse Warehouse?     @relation("MarketDefaultWarehouse", fields: [defaultWarehouseId], references: [id])
+  domains          MarketDomain[]
+  taxRates         TaxRate[]
+  marketProducts   MarketProduct[]
+  deliveryZones    DeliveryZone[]
+  customers        Customer[]
+  carts            Cart[]
+  orders           Order[]
+  settings         Setting[]
+  coupons          Coupon[]
+  blackoutDates    BlackoutDate[]
+
+  @@map("markets")
+}
+
+/// Host → market resolution. Multiple hosts per market (apex, www, staging).
+model MarketDomain {
+  id        String   @id @default(uuid(7))
+  marketId  String
+  hostname  String   @unique
+  isPrimary Boolean  @default(false)
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+
+  market Market @relation(fields: [marketId], references: [id], onDelete: Cascade)
+
+  @@index([marketId])
+  @@map("market_domains")
+}
+
+/// Tax grouping on the product (India: HSN-driven GST; UK: VAT rate band).
+model TaxClass {
+  id          String   @id @default(uuid(7))
+  code        String   @unique /// "FOOD_STANDARD", "FOOD_ZERO"
+  name        String
+  description String?
+  createdAt   DateTime @default(now()) @db.Timestamptz(6)
+
+  taxRates TaxRate[]
+  products Product[]
+
+  @@map("tax_classes")
+}
+
+model TaxRate {
+  id         String    @id @default(uuid(7))
+  marketId   String
+  taxClassId String
+  /// Percentage, e.g. 5.00 for 5% GST, 0.00 for UK zero-rated food.
+  rate       Decimal   @db.Decimal(6, 3)
+  label      String /// "GST 5%", "VAT 0%"
+  validFrom  DateTime  @db.Date
+  validTo    DateTime? @db.Date
+
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+
+  market   Market   @relation(fields: [marketId], references: [id], onDelete: Cascade)
+  taxClass TaxClass @relation(fields: [taxClassId], references: [id], onDelete: Cascade)
+
+  @@index([marketId, taxClassId, validFrom])
+  @@map("tax_rates")
+}
+
+/// Runtime configuration. Nothing operational is compiled into the code.
+model Setting {
+  id       String  @id @default(uuid(7))
+  marketId String?
+  key      String
+  value    Json
+  /// Safe to expose on the storefront?
+  isPublic Boolean @default(false)
+
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @db.Timestamptz(6)
+
+  market Market? @relation(fields: [marketId], references: [id], onDelete: Cascade)
+
+  @@unique([marketId, key])
+  @@map("settings")
+}
+
+// ===========================================================================
+// CATALOGUE
+// ===========================================================================
+
+model Category {
+  id          String  @id @default(uuid(7))
+  parentId    String?
+  slug        String  @unique
+  name        String
+  description String?
+  imageUrl    String?
+  sortOrder   Int     @default(0)
+  isActive    Boolean @default(true)
+
+  seoTitle       String?
+  seoDescription String?
+
+  createdAt DateTime  @default(now()) @db.Timestamptz(6)
+  updatedAt DateTime  @updatedAt @db.Timestamptz(6)
+  deletedAt DateTime? @db.Timestamptz(6)
+
+  parent   Category?         @relation("CategoryTree", fields: [parentId], references: [id])
+  children Category[]        @relation("CategoryTree")
+  products ProductCategory[]
+
+  @@index([parentId, sortOrder])
+  @@index([isActive])
+  @@map("categories")
+}
+
+model Product {
+  id               String    @id @default(uuid(7))
+  slug             String    @unique
+  name             String
+  shortDescription String?
+  description      String?
+  brand            String    @default("Mylapore Bites")
+  taxClassId       String?
+
+  /// THE field that decides whether ordering reserves capacity.
+  stockMode StockMode @default(FRESH_PREORDER)
+
+  /// Customer-facing freshness copy, per product. Not hard-coded in the UI.
+  freshnessNote String?
+
+  ingredients          String?
+  allergens            Json? /// string[]
+  nutrition            Json? /// { per100g: {...} }
+  storageInstructions  String?
+  countryOfOrigin      String  @default("India")
+  preparationNotes     String?
+
+  isActive     Boolean @default(true)
+  isFeatured   Boolean @default(false)
+  isNew        Boolean @default(false)
+  isBestseller Boolean @default(false)
+
+  seoTitle       String?
+  seoDescription String?
+
+  createdAt DateTime  @default(now()) @db.Timestamptz(6)
+  updatedAt DateTime  @updatedAt @db.Timestamptz(6)
+  deletedAt DateTime? @db.Timestamptz(6)
+
+  taxClass       TaxClass?         @relation(fields: [taxClassId], references: [id])
+  categories     ProductCategory[]
+  variants       ProductVariant[]
+  images         ProductImage[]
+  marketProducts MarketProduct[]
+  reviews        Review[]
+
+  @@index([isActive, isFeatured])
+  @@index([stockMode])
+  @@map("products")
+}
+
+model ProductCategory {
+  productId  String
+  categoryId String
+  isPrimary  Boolean @default(false)
+
+  product  Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  category Category @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+
+  @@id([productId, categoryId])
+  @@index([categoryId])
+  @@map("product_categories")
+}
+
+model ProductImage {
+  id        String   @id @default(uuid(7))
+  productId String
+  url       String
+  altText   String?
+  sortOrder Int      @default(0)
+  isThumbnail Boolean @default(false)
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@index([productId, sortOrder])
+  @@map("product_images")
+}
+
+/// The sellable unit. Pack size lives here, never on the product.
+model ProductVariant {
+  id        String  @id @default(uuid(7))
+  productId String
+  sku       String  @unique
+  name      String /// "500g", "1kg"
+  barcode   String?
+
+  packSize Decimal @db.Decimal(10, 3)
+  unit     String /// "g", "kg", "ml", "piece"
+  /// Shipping weight in grams, including packaging.
+  weightGrams Int?
+
+  shelfLifeDays Int?
+  sortOrder     Int     @default(0)
+  isActive      Boolean @default(true)
+
+  createdAt DateTime  @default(now()) @db.Timestamptz(6)
+  updatedAt DateTime  @updatedAt @db.Timestamptz(6)
+  deletedAt DateTime? @db.Timestamptz(6)
+
+  product        Product                 @relation(fields: [productId], references: [id], onDelete: Cascade)
+  productionRule VariantProductionRule?
+  marketVariants MarketProductVariant[]
+  capacities     ProductionCapacity[]
+  cartItems      CartItem[]
+  orderItems     OrderItem[]
+  planItems      ProductionPlanItem[]
+  batches        ProductionBatch[]
+  inventoryItems InventoryItem[]
+  reservations   CapacityReservation[]
+
+  @@index([productId, sortOrder])
+  @@map("product_variants")
+}
+
+/// Which products a market sells. Never a separate product table per country.
+model MarketProduct {
+  id        String  @id @default(uuid(7))
+  marketId  String
+  productId String
+  isActive  Boolean @default(true)
+  sortOrder Int     @default(0)
+
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @db.Timestamptz(6)
+
+  market   Market                 @relation(fields: [marketId], references: [id], onDelete: Cascade)
+  product  Product                @relation(fields: [productId], references: [id], onDelete: Cascade)
+  variants MarketProductVariant[]
+
+  @@unique([marketId, productId])
+  @@index([marketId, isActive])
+  @@map("market_products")
+}
+
+/// Price lives here — per market, per variant. ₹120 and £3.49 are two rows.
+model MarketProductVariant {
+  id              String   @id @default(uuid(7))
+  marketProductId String
+  variantId       String
+  price           Decimal  @db.Decimal(12, 2)
+  /// Strike-through "was" price. Null when not discounted.
+  compareAtPrice  Decimal? @db.Decimal(12, 2)
+  isActive        Boolean  @default(true)
+
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @db.Timestamptz(6)
+
+  marketProduct MarketProduct  @relation(fields: [marketProductId], references: [id], onDelete: Cascade)
+  variant       ProductVariant @relation(fields: [variantId], references: [id], onDelete: Cascade)
+
+  @@unique([marketProductId, variantId])
+  @@index([variantId])
+  @@map("market_product_variants")
+}
+
+// ===========================================================================
+// PRE-ORDER CORE  —  the heart of the platform
+// ===========================================================================
+
+/// Everything needed to answer "when can this be delivered?" — all data,
+/// no hard-coded dates anywhere in the frontend.
+model VariantProductionRule {
+  id        String @id @default(uuid(7))
+  variantId String @unique
+
+  /// Days between production and delivery. 1 = made the day before.
+  leadTimeDays Int @default(1)
+  /// Local time on the cut-off day, e.g. 20:00.
+  cutoffTime   String @default("20:00")
+  /// Days BEFORE the production date that ordering closes.
+  cutoffOffsetDays Int @default(1)
+
+  /// ISO weekdays (1=Mon .. 7=Sun) this variant can be DELIVERED on.
+  deliveryWeekdays Int[] @default([1, 2, 3, 4, 5, 6, 7])
+  /// ISO weekdays the kitchen can PRODUCE this variant.
+  productionWeekdays Int[] @default([1, 2, 3, 4, 5, 6])
+
+  /// Units the kitchen can make per production day.
+  dailyCapacity Int @default(100)
+  minOrderQty   Int @default(1)
+  maxOrderQty   Int @default(20)
+
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @db.Timestamptz(6)
+
+  variant ProductVariant @relation(fields: [variantId], references: [id], onDelete: Cascade)
+
+  @@map("variant_production_rules")
+}
+
+/// One row per (kitchen, variant, production day). The unit of contention.
+///
+/// `reservedUnits` is only ever changed by the atomic guarded UPDATE in
+/// CapacityRepository.reserve() — never by a read-modify-write in app code.
+model ProductionCapacity {
+  id             String   @id @default(uuid(7))
+  warehouseId    String
+  variantId      String
+  productionDate DateTime @db.Date
+
+  capacityUnits Int
+  reservedUnits Int            @default(0)
+  producedUnits Int            @default(0)
+  status        CapacityStatus @default(OPEN)
+
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @db.Timestamptz(6)
+
+  warehouse    Warehouse             @relation(fields: [warehouseId], references: [id], onDelete: Cascade)
+  variant      ProductVariant        @relation(fields: [variantId], references: [id], onDelete: Cascade)
+  reservations CapacityReservation[]
+  planItems    ProductionPlanItem[]
+
+  /// The uniqueness that makes the atomic reserve safe.
+  @@unique([warehouseId, variantId, productionDate])
+  @@index([productionDate, status])
+  @@map("production_capacity")
+}
+
+model CapacityReservation {
+  id         String @id @default(uuid(7))
+  capacityId String
+  variantId  String
+  cartId     String?
+  orderId    String?
+
+  qty    Int
+  status ReservationStatus @default(HELD)
+
+  /// Null once CONFIRMED. A HELD row past this is swept by the worker.
+  expiresAt  DateTime? @db.Timestamptz(6)
+  releasedAt DateTime? @db.Timestamptz(6)
+
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @db.Timestamptz(6)
+
+  capacity ProductionCapacity @relation(fields: [capacityId], references: [id], onDelete: Cascade)
+  variant  ProductVariant     @relation(fields: [variantId], references: [id])
+  cart     Cart?              @relation(fields: [cartId], references: [id], onDelete: SetNull)
+  order    Order?             @relation(fields: [orderId], references: [id], onDelete: SetNull)
+
+  @@index([capacityId, status])
+  @@index([status, expiresAt])
+  @@index([orderId])
+  @@index([cartId])
+  @@map("capacity_reservations")
+}
+
+/// Kitchen closures and public holidays. Removes dates from availability.
+model BlackoutDate {
+  id          String   @id @default(uuid(7))
+  marketId    String?
+  warehouseId String?
+  date        DateTime @db.Date
+  reason      String
+  /// Blocks delivery, production, or both.
+  blocksDelivery   Boolean @default(true)
+  blocksProduction Boolean @default(true)
+
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+
+  market    Market?    @relation(fields: [marketId], references: [id], onDelete: Cascade)
+  warehouse Warehouse? @relation(fields: [warehouseId], references: [id], onDelete: Cascade)
+
+  @@index([date])
+  @@map("blackout_dates")
+}
+
+// ===========================================================================
+// PRODUCTION
+// ===========================================================================
+
+model Warehouse {
+  id       String  @id @default(uuid(7))
+  code     String  @unique
+  name     String
+  /// Production centre vs pure storage.
+  isProductionCentre Boolean @default(true)
+
+  addressLine1 String?
+  addressLine2 String?
+  city         String?
+  state        String?
+  postcode     String?
+  country      String  @default("India")
+  timezone     String  @default("Asia/Kolkata")
+  isActive     Boolean @default(true)
+
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @db.Timestamptz(6)
+
+  capacities      ProductionCapacity[]
+  plans           ProductionPlan[]
+  batches         ProductionBatch[]
+  inventoryItems  InventoryItem[]
+  blackoutDates   BlackoutDate[]
+  defaultForMarkets Market[]           @relation("MarketDefaultWarehouse")
+
+  @@map("warehouses")
+}
+
+model ProductionPlan {
+  id             String               @id @default(uuid(7))
+  warehouseId    String
+  productionDate DateTime             @db.Date
+  status         ProductionPlanStatus @default(PLANNED)
+  notes          String?
+  generatedAt    DateTime             @default(now()) @db.Timestamptz(6)
+
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @db.Timestamptz(6)
+
+  warehouse Warehouse            @relation(fields: [warehouseId], references: [id], onDelete: Cascade)
+  items     ProductionPlanItem[]
+
+  @@unique([warehouseId, productionDate])
+  @@index([productionDate, status])
+  @@map("production_plans")
+}
+
+model ProductionPlanItem {
+  id         String  @id @default(uuid(7))
+  planId     String
+  variantId  String
+  capacityId String?
+
+  requiredQty Int
+  plannedQty  Int @default(0)
+
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @db.Timestamptz(6)
+
+  plan     ProductionPlan      @relation(fields: [planId], references: [id], onDelete: Cascade)
+  variant  ProductVariant      @relation(fields: [variantId], references: [id])
+  capacity ProductionCapacity? @relation(fields: [capacityId], references: [id])
+  batches  ProductionBatch[]
+
+  @@unique([planId, variantId])
+  @@map("production_plan_items")
+}
+
+model ProductionBatch {
+  id          String  @id @default(uuid(7))
+  batchCode   String  @unique
+  planItemId  String?
+  warehouseId String
+  variantId   String
+
+  requiredQty Int
+  producedQty Int @default(0)
+  wastageQty  Int @default(0)
+
+  productionDate DateTime  @db.Date
+  bestBefore     DateTime? @db.Date
+
+  status              ProductionBatchStatus @default(PLANNED)
+  responsibleStaffId  String?
+  qualityCheckedById  String?
+  qualityCheckedAt    DateTime?             @db.Timestamptz(6)
+  notes               String?
+
+  startedAt   DateTime? @db.Timestamptz(6)
+  completedAt DateTime? @db.Timestamptz(6)
+
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @db.Timestamptz(6)
+
+  planItem         ProductionPlanItem?  @relation(fields: [planItemId], references: [id])
+  warehouse        Warehouse            @relation(fields: [warehouseId], references: [id])
+  variant          ProductVariant       @relation(fields: [variantId], references: [id])
+  responsibleStaff AdminUser?           @relation("BatchResponsible", fields: [responsibleStaffId], references: [id])
+  qualityCheckedBy AdminUser?           @relation("BatchQC", fields: [qualityCheckedById], references: [id])
+  ingredientUses   BatchIngredientUse[]
+
+  @@index([productionDate, status])
+  @@index([variantId])
+  @@map("production_batches")
+}
+
+model BatchIngredientUse {
+  id           String  @id @default(uuid(7))
+  batchId      String
+  ingredientId String
+  plannedQty   Decimal @db.Decimal(12, 3)
+  actualQty    Decimal? @db.Decimal(12, 3)
+  unit         String
+
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+
+  batch      ProductionBatch @relation(fields: [batchId], references: [id], onDelete: Cascade)
+  ingredient Ingredient      @relation(fields: [ingredientId], references: [id])
+
+  @@index([batchId])
+  @@map("batch_ingredient_uses")
+}
+
+// ===========================================================================
+// INVENTORY  —  quantity is DERIVED from movements, never set directly
+// ===========================================================================
+
+model Ingredient {
+  id       String  @id @default(uuid(7))
+  code     String  @unique
+  name     String
+  unit     String /// "kg", "litre", "piece"
+  isActive Boolean @default(true)
+
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @db.Timestamptz(6)
+
+  inventoryItems InventoryItem[]
+  batchUses      BatchIngredientUse[]
+
+  @@map("ingredients")
+}
+
+model PackagingMaterial {
+  id       String  @id @default(uuid(7))
+  code     String  @unique
+  name     String
+  unit     String
+  isActive Boolean @default(true)
+
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+
+  inventoryItems InventoryItem[]
+
+  @@map("packaging_materials")
+}
+
+model InventoryItem {
+  id          String            @id @default(uuid(7))
+  warehouseId String
+  type        InventoryItemType
+
+  variantId    String?
+  ingredientId String?
+  packagingId  String?
+
+  /// Cached running total. Source of truth is the movement ledger.
+  quantity     Decimal @default(0) @db.Decimal(12, 3)
+  reorderLevel Decimal @default(0) @db.Decimal(12, 3)
+  unit         String
+
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @db.Timestamptz(6)
+
+  warehouse  Warehouse           @relation(fields: [warehouseId], references: [id], onDelete: Cascade)
+  variant    ProductVariant?     @relation(fields: [variantId], references: [id])
+  ingredient Ingredient?         @relation(fields: [ingredientId], references: [id])
+  packaging  PackagingMaterial?  @relation(fields: [packagingId], references: [id])
+  movements  InventoryMovement[]
+
+  @@unique([warehouseId, variantId])
+  @@unique([warehouseId, ingredientId])
+  @@unique([warehouseId, packagingId])
+  @@index([warehouseId, type])
+  @@map("inventory_items")
+}
+
+model InventoryMovement {
+  id              String                  @id @default(uuid(7))
+  inventoryItemId String
+  reason          InventoryMovementReason
+  /// Signed. Positive adds, negative consumes.
+  qtyDelta        Decimal                 @db.Decimal(12, 3)
+  /// Order id, batch id, purchase id — whatever caused this.
+  referenceType   String?
+  referenceId     String?
+  notes           String?
+  createdById     String?
+
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+
+  inventoryItem InventoryItem @relation(fields: [inventoryItemId], references: [id], onDelete: Cascade)
+  createdBy     AdminUser?    @relation(fields: [createdById], references: [id])
+
+  @@index([inventoryItemId, createdAt])
+  @@index([referenceType, referenceId])
+  @@map("inventory_movements")
+}
+
+// ===========================================================================
+// CUSTOMER & AUTH
+// ===========================================================================
+
+model Customer {
+  id          String  @id @default(uuid(7))
+  /// Human-readable reference shown in Admin and support conversations.
+  customerRef String  @unique
+  marketId    String
+
+  /// Identity. Always E.164.
+  phoneE164     String  @unique
+  phoneVerified Boolean @default(false)
+
+  email         String?
+  emailVerified Boolean @default(false)
+  firstName     String?
+  lastName      String?
+
+  /// Segment is a row reference, not a hard-coded enum branch.
+  segmentId String?
+
+  marketingOptInWhatsapp Boolean @default(false)
+  marketingOptInEmail    Boolean @default(false)
+
+  lastOrderAt DateTime? @db.Timestamptz(6)
+  orderCount  Int       @default(0)
+  isBlocked   Boolean   @default(false)
+
+  createdAt DateTime  @default(now()) @db.Timestamptz(6)
+  updatedAt DateTime  @updatedAt @db.Timestamptz(6)
+  deletedAt DateTime? @db.Timestamptz(6)
+
+  market    Market           @relation(fields: [marketId], references: [id])
+  segment   CustomerSegment? @relation(fields: [segmentId], references: [id])
+  addresses Address[]
+  carts     Cart[]
+  orders    Order[]
+  reviews   Review[]
+  sessions  AuthSession[]
+  otps      OtpChallenge[]
+  redemptions CouponRedemption[]
+
+  @@index([marketId])
+  @@index([createdAt])
+  @@map("customers")
+}
+
+/// Segmentation rules are configurable, not compiled in.
+model CustomerSegment {
+  id          String  @id @default(uuid(7))
+  code        String  @unique /// NEW, REPEAT, LOYAL, WHOLESALE, VIP
+  name        String
+  description String?
+  /// e.g. { "minOrders": 5, "minSpend": 5000 } — evaluated by a rules service.
+  rules       Json?
+  sortOrder   Int     @default(0)
+  isActive    Boolean @default(true)
+
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+
+  customers Customer[]
+
+  @@map("customer_segments")
+}
+
+model Address {
+  id         String      @id @default(uuid(7))
+  customerId String
+  label      AddressType @default(HOME)
+
+  fullName     String
+  phoneE164    String
+  addressLine1 String
+  addressLine2 String?
+  area         String?
+  city         String
+  state        String?
+  postcode     String
+  country      String      @default("India")
+  landmark     String?
+  deliveryInstructions String?
+
+  latitude  Decimal? @db.Decimal(10, 7)
+  longitude Decimal? @db.Decimal(10, 7)
+
+  /// Cached zone match. Re-resolved at checkout; never trusted blindly.
+  deliveryZoneId String?
+
+  isDefault Boolean @default(false)
+
+  createdAt DateTime  @default(now()) @db.Timestamptz(6)
+  updatedAt DateTime  @updatedAt @db.Timestamptz(6)
+  deletedAt DateTime? @db.Timestamptz(6)
+
+  customer     Customer      @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  deliveryZone DeliveryZone? @relation(fields: [deliveryZoneId], references: [id])
+  carts        Cart[]
+
+  @@index([customerId])
+  @@index([postcode])
+  @@map("addresses")
+}
+
+/// The OTP is never stored in readable form. `codeHash` is Argon2id.
+model OtpChallenge {
+  id         String     @id @default(uuid(7))
+  customerId String?
+  phoneE164  String
+  purpose    OtpPurpose @default(LOGIN)
+
+  codeHash    String
+  channel     OtpChannel @default(WHATSAPP)
+  /// Set when the WhatsApp send failed or timed out and SMS was used.
+  fallbackUsed Boolean   @default(false)
+
+  attempts    Int      @default(0)
+  maxAttempts Int      @default(5)
+  expiresAt   DateTime @db.Timestamptz(6)
+
+  consumedAt DateTime? @db.Timestamptz(6)
+  requestIp  String?
+  userAgent  String?
+
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+
+  customer Customer? @relation(fields: [customerId], references: [id], onDelete: SetNull)
+
+  @@index([phoneE164, createdAt])
+  @@index([expiresAt])
+  @@map("otp_challenges")
+}
+
+/// Refresh tokens: opaque, SHA-256 hashed, rotating, reuse-detecting.
+model AuthSession {
+  id         String @id @default(uuid(7))
+  customerId String
+
+  refreshTokenHash String  @unique
+  /// All rotations of one login share a family id. Reuse revokes the family.
+  familyId         String
+  /// Set when this token is rotated out. A hit on a rotated token = theft.
+  rotatedAt        DateTime? @db.Timestamptz(6)
+  revokedAt        DateTime? @db.Timestamptz(6)
+  revokedReason    String?
+
+  expiresAt DateTime @db.Timestamptz(6)
+  ip        String?
+  userAgent String?
+
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+
+  customer Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+  @@index([customerId])
+  @@index([familyId])
+  @@index([expiresAt])
+  @@map("auth_sessions")
+}
+
+// ===========================================================================
+// CART
+// ===========================================================================
+
+model Cart {
+  id         String     @id @default(uuid(7))
+  marketId   String
+  customerId String?
+  /// Anonymous cart identity before login.
+  guestToken String?    @unique
+  status     CartStatus @default(ACTIVE)
+
+  addressId      String?
+  deliveryDate   DateTime? @db.Date
+  deliverySlotId String?
+
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @db.Timestamptz(6)
+  expiresAt DateTime? @db.Timestamptz(6)
+
+  market       Market                @relation(fields: [marketId], references: [id])
+  customer     Customer?             @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  address      Address?              @relation(fields: [addressId], references: [id])
+  deliverySlot DeliverySlot?         @relation(fields: [deliverySlotId], references: [id])
+  items        CartItem[]
+  reservations CapacityReservation[]
+
+  @@index([customerId, status])
+  @@map("carts")
+}
+
+model CartItem {
+  id        String @id @default(uuid(7))
+  cartId    String
+  variantId String
+  qty       Int
+
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @db.Timestamptz(6)
+
+  cart    Cart           @relation(fields: [cartId], references: [id], onDelete: Cascade)
+  variant ProductVariant @relation(fields: [variantId], references: [id])
+
+  @@unique([cartId, variantId])
+  @@map("cart_items")
+}
+
+// ===========================================================================
+// ORDERS
+// ===========================================================================
+
+model Order {
+  id          String @id @default(uuid(7))
+  orderNumber String @unique /// MB-IND-20260914-000123
+  marketId    String
+  customerId  String
+
+  /// Four independent lifecycles. Deliberately not one column.
+  status           OrderStatus      @default(PENDING)
+  paymentStatus    PaymentStatus    @default(PENDING)
+  productionStatus ProductionStatus @default(PENDING)
+  fulfilmentStatus FulfilmentStatus @default(WAITING)
+
+  /// Immutable copy. Editing the saved address never rewrites history.
+  addressSnapshot Json
+
+  deliveryDate   DateTime  @db.Date
+  deliverySlotId String?
+  deliveryZoneId String?
+
+  currency       String   @db.Char(3)
+  subtotal       Decimal  @db.Decimal(12, 2)
+  discountTotal  Decimal  @default(0) @db.Decimal(12, 2)
+  deliveryFee    Decimal  @default(0) @db.Decimal(12, 2)
+  taxTotal       Decimal  @default(0) @db.Decimal(12, 2)
+  grandTotal     Decimal  @db.Decimal(12, 2)
+
+  couponId       String?
+  customerNotes  String?
+  internalNotes  String?
+
+  placedAt    DateTime? @db.Timestamptz(6)
+  confirmedAt DateTime? @db.Timestamptz(6)
+  deliveredAt DateTime? @db.Timestamptz(6)
+  cancelledAt DateTime? @db.Timestamptz(6)
+  cancelReason String?
+
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @db.Timestamptz(6)
+
+  market        Market                    @relation(fields: [marketId], references: [id])
+  customer      Customer                  @relation(fields: [customerId], references: [id])
+  deliverySlot  DeliverySlot?             @relation(fields: [deliverySlotId], references: [id])
+  deliveryZone  DeliveryZone?             @relation(fields: [deliveryZoneId], references: [id])
+  coupon        Coupon?                   @relation(fields: [couponId], references: [id])
+  items         OrderItem[]
+  statusHistory OrderStatusHistory[]
+  payments      Payment[]
+  reservations  CapacityReservation[]
+  shipments     Shipment[]
+  notifications Notification[]
+  reviews       Review[]
+  slotAllocation DeliverySlotAllocation?
+  redemptions   CouponRedemption[]
+
+  @@index([marketId, status, deliveryDate])
+  @@index([customerId, createdAt])
+  @@index([deliveryDate, fulfilmentStatus])
+  @@map("orders")
+}
+
+/// Every commercial fact is snapshotted. Changing a price later is safe.
+model OrderItem {
+  id        String @id @default(uuid(7))
+  orderId   String
+  variantId String
+
+  skuSnapshot         String
+  productNameSnapshot String
+  variantNameSnapshot String
+  unitPriceSnapshot   Decimal @db.Decimal(12, 2)
+  taxRateSnapshot     Decimal @db.Decimal(6, 3)
+  stockModeSnapshot   StockMode
+
+  qty        Int
+  lineSubtotal Decimal @db.Decimal(12, 2)
+  lineTax      Decimal @db.Decimal(12, 2)
+  lineTotal    Decimal @db.Decimal(12, 2)
+
+  /// Which day this line is cooked on. Derived at checkout, stored forever.
+  productionDate DateTime? @db.Date
+
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+
+  order   Order          @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  variant ProductVariant @relation(fields: [variantId], references: [id])
+  reviews Review[]
+
+  @@index([orderId])
+  @@index([variantId])
+  @@map("order_items")
+}
+
+model OrderStatusHistory {
+  id        String  @id @default(uuid(7))
+  orderId   String
+  /// Which lifecycle changed: order | payment | production | fulfilment
+  statusType String
+  fromStatus String?
+  toStatus   String
+  note       String?
+  changedById String?
+  /// "system" for worker-driven transitions.
+  changedBy  String @default("system")
+
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+
+  order     Order      @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  changedByAdmin AdminUser? @relation(fields: [changedById], references: [id])
+
+  @@index([orderId, createdAt])
+  @@map("order_status_history")
+}
+
+/// Generic named counter. Same atomic-upsert trick as OrderCounter, used for
+/// human-readable references (customer refs, batch codes) that must be unique
+/// under concurrency without a table scan.
+model Counter {
+  key   String @id
+  value Int    @default(0)
+
+  updatedAt DateTime @updatedAt @db.Timestamptz(6)
+
+  @@map("counters")
+}
+
+/// Gapless, collision-free daily sequence per market.
+model OrderCounter {
+  marketCode   String
+  businessDate DateTime @db.Date
+  lastSeq      Int      @default(0)
+
+  updatedAt DateTime @updatedAt @db.Timestamptz(6)
+
+  @@id([marketCode, businessDate])
+  @@map("order_counters")
+}
+
+/// Makes checkout safe to retry. A replay returns the original order.
+model IdempotencyKey {
+  id         String  @id @default(uuid(7))
+  customerId String
+  key        String
+  endpoint   String
+  /// Hash of the request body — a same-key-different-body replay is rejected.
+  requestHash String
+  statusCode  Int?
+  responseBody Json?
+  lockedAt    DateTime? @db.Timestamptz(6)
+
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+  expiresAt DateTime @db.Timestamptz(6)
+
+  @@unique([customerId, key])
+  @@index([expiresAt])
+  @@map("idempotency_keys")
+}
+
+// ===========================================================================
+// PAYMENTS
+// ===========================================================================
+
+model Payment {
+  id       String              @id @default(uuid(7))
+  orderId  String
+  provider PaymentProviderKind
+  /// Provider's order/intent id.
+  providerRef String?
+  /// Provider's payment id, set once captured.
+  providerPaymentId String?
+
+  status   PaymentStatus @default(PENDING)
+  currency String        @db.Char(3)
+  amount   Decimal       @db.Decimal(12, 2)
+  amountRefunded Decimal @default(0) @db.Decimal(12, 2)
+
+  method       String?
+  failureCode  String?
+  failureMessage String?
+
+  authorizedAt DateTime? @db.Timestamptz(6)
+  paidAt       DateTime? @db.Timestamptz(6)
+
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @db.Timestamptz(6)
+
+  order        Order                @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  transactions PaymentTransaction[]
+  refunds      Refund[]
+
+  @@index([orderId])
+  @@index([providerRef])
+  @@map("payments")
+}
+
+model PaymentTransaction {
+  id        String  @id @default(uuid(7))
+  paymentId String
+  kind      String /// authorize | capture | refund | fail
+  amount    Decimal @db.Decimal(12, 2)
+  providerTxnId String?
+  rawPayload Json?
+
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+
+  payment Payment @relation(fields: [paymentId], references: [id], onDelete: Cascade)
+
+  @@index([paymentId])
+  @@map("payment_transactions")
+}
+
+model Refund {
+  id        String  @id @default(uuid(7))
+  paymentId String
+  amount    Decimal @db.Decimal(12, 2)
+  reason    String?
+  providerRefundId String?
+  status    String  @default("PENDING")
+  createdById String?
+
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+
+  payment   Payment    @relation(fields: [paymentId], references: [id], onDelete: Cascade)
+  createdBy AdminUser? @relation(fields: [createdById], references: [id])
+
+  @@index([paymentId])
+  @@map("refunds")
+}
+
+/// Exactly-once webhook processing. The unique index IS the replay defence.
+model WebhookEvent {
+  id         String @id @default(uuid(7))
+  provider   String /// razorpay | stripe | whatsapp
+  externalId String
+  eventType  String
+
+  signatureVerified Boolean   @default(false)
+  payload           Json
+  processedAt       DateTime? @db.Timestamptz(6)
+  attempts          Int       @default(0)
+  lastError         String?
+
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+
+  @@unique([provider, externalId])
+  @@index([processedAt])
+  @@map("webhook_events")
+}
+
+// ===========================================================================
+// DELIVERY
+// ===========================================================================
+
+model DeliveryZone {
+  id       String @id @default(uuid(7))
+  marketId String
+  code     String
+  name     String
+
+  /// GeoJSON polygon. jsonb now; PostGIS migration later is additive.
+  polygon Json?
+
+  deliveryFee            Decimal @db.Decimal(12, 2)
+  minOrderValue          Decimal @default(0) @db.Decimal(12, 2)
+  freeDeliveryThreshold  Decimal? @db.Decimal(12, 2)
+  estimatedMinutes       Int?
+
+  /// ISO weekdays this zone is served on.
+  serviceWeekdays Int[] @default([1, 2, 3, 4, 5, 6, 7])
+
+  sortOrder Int     @default(0)
+  isActive  Boolean @default(true)
+
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @db.Timestamptz(6)
+
+  market    Market         @relation(fields: [marketId], references: [id], onDelete: Cascade)
+  postcodes ZonePostcode[]
+  slots     DeliverySlot[]
+  addresses Address[]
+  orders    Order[]
+
+  @@unique([marketId, code])
+  @@index([marketId, isActive])
+  @@map("delivery_zones")
+}
+
+model ZonePostcode {
+  id       String @id @default(uuid(7))
+  zoneId   String
+  postcode String
+
+  zone DeliveryZone @relation(fields: [zoneId], references: [id], onDelete: Cascade)
+
+  @@unique([zoneId, postcode])
+  @@index([postcode])
+  @@map("zone_postcodes")
+}
+
+model DeliverySlot {
+  id     String @id @default(uuid(7))
+  zoneId String
+  /// ISO weekday 1..7
+  weekday   Int
+  startTime String /// "10:00"
+  endTime   String /// "12:00"
+  maxOrders Int    @default(20)
+  sortOrder Int    @default(0)
+  isActive  Boolean @default(true)
+
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @db.Timestamptz(6)
+
+  zone        DeliveryZone            @relation(fields: [zoneId], references: [id], onDelete: Cascade)
+  allocations DeliverySlotAllocation[]
+  carts       Cart[]
+  orders      Order[]
+
+  @@unique([zoneId, weekday, startTime])
+  @@map("delivery_slots")
+}
+
+/// Same atomic-reserve pattern as production capacity, for slot headroom.
+model DeliverySlotAllocation {
+  id           String   @id @default(uuid(7))
+  slotId       String
+  deliveryDate DateTime @db.Date
+  orderId      String?  @unique
+
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+
+  slot  DeliverySlot @relation(fields: [slotId], references: [id], onDelete: Cascade)
+  order Order?       @relation(fields: [orderId], references: [id], onDelete: SetNull)
+
+  @@index([slotId, deliveryDate])
+  @@map("delivery_slot_allocations")
+}
+
+model Shipment {
+  id      String @id @default(uuid(7))
+  orderId String
+  /// Nullable — driver accounts are a later phase, schema is ready.
+  driverId String?
+  status   FulfilmentStatus @default(WAITING)
+
+  assignedAt  DateTime? @db.Timestamptz(6)
+  dispatchedAt DateTime? @db.Timestamptz(6)
+  deliveredAt DateTime? @db.Timestamptz(6)
+  failureReason String?
+  proofUrl    String?
+
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @db.Timestamptz(6)
+
+  order  Order           @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  events DeliveryEvent[]
+
+  @@index([orderId])
+  @@map("shipments")
+}
+
+model DeliveryEvent {
+  id         String  @id @default(uuid(7))
+  shipmentId String
+  eventType  String
+  note       String?
+  latitude   Decimal? @db.Decimal(10, 7)
+  longitude  Decimal? @db.Decimal(10, 7)
+
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+
+  shipment Shipment @relation(fields: [shipmentId], references: [id], onDelete: Cascade)
+
+  @@index([shipmentId, createdAt])
+  @@map("delivery_events")
+}
+
+// ===========================================================================
+// DISCOUNTS
+// ===========================================================================
+
+model Coupon {
+  id       String       @id @default(uuid(7))
+  marketId String
+  code     String
+  type     DiscountType
+  value    Decimal      @db.Decimal(12, 2)
+
+  minOrderValue   Decimal? @db.Decimal(12, 2)
+  maxDiscount     Decimal? @db.Decimal(12, 2)
+  usageLimit      Int?
+  usageLimitPerCustomer Int? @default(1)
+  usedCount       Int      @default(0)
+
+  startsAt DateTime? @db.Timestamptz(6)
+  endsAt   DateTime? @db.Timestamptz(6)
+  isActive Boolean   @default(true)
+
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @db.Timestamptz(6)
+
+  market      Market             @relation(fields: [marketId], references: [id], onDelete: Cascade)
+  orders      Order[]
+  redemptions CouponRedemption[]
+
+  @@unique([marketId, code])
+  @@map("coupons")
+}
+
+/// Rows here enforce per-customer usage limits transactionally.
+model CouponRedemption {
+  id         String  @id @default(uuid(7))
+  couponId   String
+  customerId String
+  orderId    String
+  amount     Decimal @db.Decimal(12, 2)
+
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+
+  coupon   Coupon   @relation(fields: [couponId], references: [id], onDelete: Cascade)
+  customer Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  order    Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@unique([couponId, orderId])
+  @@index([couponId, customerId])
+  @@map("coupon_redemptions")
+}
+
+model PromotionRule {
+  id       String  @id @default(uuid(7))
+  name     String
+  /// Declarative condition/action pair evaluated by the pricing service.
+  conditions Json
+  actions    Json
+  priority   Int     @default(0)
+  isActive   Boolean @default(false)
+
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @db.Timestamptz(6)
+
+  @@map("promotion_rules")
+}
+
+// ===========================================================================
+// ENGAGEMENT
+// ===========================================================================
+
+/// A review requires a delivered order item belonging to that customer.
+model Review {
+  id          String @id @default(uuid(7))
+  customerId  String
+  productId   String
+  orderId     String
+  orderItemId String
+
+  rating  Int /// 1..5, enforced by a CHECK constraint in migration SQL
+  title   String?
+  body    String?
+  status  ReviewStatus @default(PENDING)
+
+  adminResponse   String?
+  adminRespondedAt DateTime? @db.Timestamptz(6)
+
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @db.Timestamptz(6)
+
+  customer  Customer  @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  product   Product   @relation(fields: [productId], references: [id], onDelete: Cascade)
+  order     Order     @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  orderItem OrderItem @relation(fields: [orderItemId], references: [id], onDelete: Cascade)
+
+  /// One review per purchased line. Blocks review spam at the database.
+  @@unique([orderItemId])
+  @@index([productId, status])
+  @@map("reviews")
+}
+
+model NotificationTemplate {
+  id       String              @id @default(uuid(7))
+  eventKey String /// order.confirmed, production.started, ...
+  channel  NotificationChannel
+  /// Meta-approved template name for WhatsApp; subject line for email.
+  providerTemplate String?
+  subject  String?
+  body     String?
+  locale   String              @default("en")
+  isActive Boolean             @default(true)
+
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @db.Timestamptz(6)
+
+  notifications Notification[]
+
+  @@unique([eventKey, channel, locale])
+  @@map("notification_templates")
+}
+
+/// Transactional outbox. The row is written INSIDE the business transaction,
+/// so a WhatsApp outage can never lose an order confirmation.
+model Notification {
+  id         String              @id @default(uuid(7))
+  templateId String?
+  channel    NotificationChannel
+  eventKey   String
+
+  customerId String?
+  orderId    String?
+  recipient  String /// phone E.164 or email
+  payload    Json?
+
+  status      NotificationStatus @default(PENDING)
+  attempts    Int                @default(0)
+  maxAttempts Int                @default(5)
+  nextAttemptAt DateTime?        @db.Timestamptz(6)
+  providerMessageId String?
+  lastError   String?
+
+  sentAt      DateTime? @db.Timestamptz(6)
+  deliveredAt DateTime? @db.Timestamptz(6)
+
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @db.Timestamptz(6)
+
+  template NotificationTemplate? @relation(fields: [templateId], references: [id])
+  order    Order?                @relation(fields: [orderId], references: [id], onDelete: SetNull)
+
+  @@index([status, nextAttemptAt])
+  @@index([orderId])
+  @@map("notifications")
+}
+
+// ===========================================================================
+// ADMIN, RBAC & AUDIT
+// ===========================================================================
+
+model AdminUser {
+  id           String  @id @default(uuid(7))
+  email        String  @unique
+  passwordHash String
+  firstName    String
+  lastName     String
+
+  mfaSecret     String?
+  mfaEnabled    Boolean @default(false)
+  mfaConfirmedAt DateTime? @db.Timestamptz(6)
+
+  isActive    Boolean   @default(true)
+  lastLoginAt DateTime? @db.Timestamptz(6)
+  failedLoginAttempts Int @default(0)
+  lockedUntil DateTime? @db.Timestamptz(6)
+
+  createdAt DateTime  @default(now()) @db.Timestamptz(6)
+  updatedAt DateTime  @updatedAt @db.Timestamptz(6)
+  deletedAt DateTime? @db.Timestamptz(6)
+
+  roles              AdminUserRole[]
+  auditLogs          AuditLog[]
+  batchesResponsible ProductionBatch[]   @relation("BatchResponsible")
+  batchesQC          ProductionBatch[]   @relation("BatchQC")
+  inventoryMovements InventoryMovement[]
+  refunds            Refund[]
+  statusChanges      OrderStatusHistory[]
+  importJobs         ImportJob[]
+
+  @@map("admin_users")
+}
+
+model Role {
+  id          String  @id @default(uuid(7))
+  code        String  @unique /// SUPER_ADMIN, PRODUCTION_MANAGER, ...
+  name        String
+  description String?
+  isSystem    Boolean @default(false)
+
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @db.Timestamptz(6)
+
+  permissions RolePermission[]
+  users       AdminUserRole[]
+
+  @@map("roles")
+}
+
+/// Permission strings are `domain:resource:action`. Data, not code.
+model Permission {
+  id          String  @id @default(uuid(7))
+  code        String  @unique /// production:batch:update
+  domain      String
+  description String?
+
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+
+  roles RolePermission[]
+
+  @@index([domain])
+  @@map("permissions")
+}
+
+model RolePermission {
+  roleId       String
+  permissionId String
+
+  role       Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@id([roleId, permissionId])
+  @@map("role_permissions")
+}
+
+model AdminUserRole {
+  adminUserId String
+  roleId      String
+  assignedAt  DateTime @default(now()) @db.Timestamptz(6)
+
+  adminUser AdminUser @relation(fields: [adminUserId], references: [id], onDelete: Cascade)
+  role      Role      @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@id([adminUserId, roleId])
+  @@map("admin_user_roles")
+}
+
+/// Written by an interceptor for every mutating admin request.
+model AuditLog {
+  id          String  @id @default(uuid(7))
+  adminUserId String?
+  actorType   String  @default("admin") /// admin | system | customer
+  entity      String
+  entityId    String?
+  action      String
+  before      Json?
+  after       Json?
+  ip          String?
+  userAgent   String?
+  requestId   String?
+
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+
+  adminUser AdminUser? @relation(fields: [adminUserId], references: [id], onDelete: SetNull)
+
+  @@index([entity, entityId])
+  @@index([adminUserId, createdAt])
+  @@index([createdAt])
+  @@map("audit_logs")
+}
+
+/// CSV import with preview + validation. ~440 SKUs makes this essential.
+model ImportJob {
+  id          String          @id @default(uuid(7))
+  type        String /// products | prices | capacity
+  status      ImportJobStatus @default(PENDING)
+  fileUrl     String
+  fileName    String
+  createdById String?
+
+  totalRows   Int  @default(0)
+  validRows   Int  @default(0)
+  errorRows   Int  @default(0)
+  importedRows Int @default(0)
+  errors      Json?
+  preview     Json?
+
+  startedAt   DateTime? @db.Timestamptz(6)
+  completedAt DateTime? @db.Timestamptz(6)
+
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @db.Timestamptz(6)
+
+  createdBy AdminUser? @relation(fields: [createdById], references: [id])
+
+  @@index([status, createdAt])
+  @@map("import_jobs")
+}
