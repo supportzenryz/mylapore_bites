@@ -1,0 +1,1438 @@
+<title>Mylapore Bites Platform Architecture</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;0,6..72,600;1,6..72,400&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap">
+<style>
+  :root {
+    --ink:        #0F1512;
+    --ink-2:      #1C2622;
+    --surface:    #F6F8F4;
+    --surface-2:  #FFFFFF;
+    --surface-3:  #ECF0EA;
+    --line:       #D6DED2;
+    --line-soft:  #E4EADF;
+    --text:       #16201B;
+    --text-2:     #4C5A53;
+    --text-3:     #7A877F;
+    --leaf:       #1C6B48;
+    --leaf-soft:  #E2F0E8;
+    --saffron:    #B4720E;
+    --saffron-soft:#FAEEDA;
+    --clay:       #9B3A2C;
+    --clay-soft:  #F7E4E0;
+    --plate:      #FCFDFB;
+    --plate-line: #DCE3D8;
+    --shadow:     0 1px 2px rgba(16,32,24,.05), 0 8px 24px -12px rgba(16,32,24,.18);
+
+    --f-display: "Newsreader", "Iowan Old Style", Georgia, serif;
+    --f-body: "IBM Plex Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    --f-mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
+
+    --measure: 70ch;
+    --gutter: clamp(1rem, 4vw, 3rem);
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --surface:    #0E1412;
+      --surface-2:  #151D1A;
+      --surface-3:  #1B2521;
+      --line:       #2A3833;
+      --line-soft:  #222E29;
+      --text:       #E6EDE8;
+      --text-2:     #A3B0A9;
+      --text-3:     #74827B;
+      --leaf:       #56C08D;
+      --leaf-soft:  #14291F;
+      --saffron:    #E0A64D;
+      --saffron-soft:#2B2113;
+      --clay:       #E38B79;
+      --clay-soft:  #2E1A16;
+      --plate:      #F4F7F2;
+      --plate-line: #C9D3C5;
+      --shadow:     0 1px 2px rgba(0,0,0,.4), 0 8px 24px -12px rgba(0,0,0,.7);
+    }
+  }
+  :root[data-theme="dark"] {
+      --surface:    #0E1412;
+      --surface-2:  #151D1A;
+      --surface-3:  #1B2521;
+      --line:       #2A3833;
+      --line-soft:  #222E29;
+      --text:       #E6EDE8;
+      --text-2:     #A3B0A9;
+      --text-3:     #74827B;
+      --leaf:       #56C08D;
+      --leaf-soft:  #14291F;
+      --saffron:    #E0A64D;
+      --saffron-soft:#2B2113;
+      --clay:       #E38B79;
+      --clay-soft:  #2E1A16;
+      --plate:      #F4F7F2;
+      --plate-line: #C9D3C5;
+      --shadow:     0 1px 2px rgba(0,0,0,.4), 0 8px 24px -12px rgba(0,0,0,.7);
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    background: var(--surface);
+    color: var(--text);
+    font-family: var(--f-body);
+    font-size: 16px;
+    line-height: 1.62;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .shell {
+    display: grid;
+    grid-template-columns: 15rem minmax(0, 1fr);
+    gap: clamp(2rem, 5vw, 4rem);
+    max-width: 82rem;
+    margin: 0 auto;
+    padding-inline: var(--gutter);
+    padding-block: 0 5rem;
+    align-items: start;
+  }
+
+  /* ---------- nav rail ---------- */
+  nav.rail {
+    position: sticky;
+    top: 0;
+    padding-block: 2.5rem;
+    max-height: 100vh;
+    overflow-y: auto;
+  }
+  .rail-brand {
+    font-family: var(--f-mono);
+    font-size: .68rem;
+    letter-spacing: .14em;
+    text-transform: uppercase;
+    color: var(--leaf);
+    margin-bottom: 1.25rem;
+  }
+  .rail ol { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: .1rem; }
+  .rail a {
+    display: grid;
+    grid-template-columns: 1.9rem 1fr;
+    gap: .1rem;
+    padding: .34rem .5rem .34rem 0;
+    text-decoration: none;
+    color: var(--text-2);
+    font-size: .83rem;
+    line-height: 1.35;
+    border-radius: 4px;
+    transition: color .15s;
+  }
+  .rail a:hover { color: var(--leaf); }
+  .rail a .n { font-family: var(--f-mono); font-size: .7rem; color: var(--text-3); padding-top: .12em; }
+  .rail a:hover .n { color: var(--leaf); }
+  .rail a:focus-visible { outline: 2px solid var(--leaf); outline-offset: 2px; }
+
+  /* ---------- masthead ---------- */
+  header.mast {
+    grid-column: 1 / -1;
+    padding-block: clamp(2.5rem, 6vw, 4.5rem) 0;
+    border-bottom: 1px solid var(--line);
+    padding-bottom: 2rem;
+    margin-bottom: 2.5rem;
+  }
+  .eyebrow {
+    font-family: var(--f-mono);
+    font-size: .7rem;
+    letter-spacing: .16em;
+    text-transform: uppercase;
+    color: var(--leaf);
+    display: flex;
+    flex-wrap: wrap;
+    gap: .6rem;
+    align-items: center;
+  }
+  .eyebrow .sep { color: var(--text-3); }
+  h1 {
+    font-family: var(--f-display);
+    font-weight: 500;
+    font-size: clamp(2.3rem, 6.5vw, 4rem);
+    line-height: 1.03;
+    letter-spacing: -.02em;
+    margin: .7rem 0 0;
+    text-wrap: balance;
+  }
+  .standfirst {
+    font-family: var(--f-display);
+    font-size: clamp(1.05rem, 2.4vw, 1.3rem);
+    line-height: 1.5;
+    color: var(--text-2);
+    max-width: 46ch;
+    margin: 1rem 0 0;
+  }
+  .thesis {
+    margin-top: 1.75rem;
+    padding: 1rem 1.15rem;
+    border-left: 3px solid var(--leaf);
+    background: var(--leaf-soft);
+    border-radius: 0 6px 6px 0;
+    font-size: .93rem;
+    max-width: 62ch;
+  }
+  .thesis strong { color: var(--leaf); }
+
+  /* ---------- sections ---------- */
+  main { min-width: 0; }
+  section { padding-block: 2.75rem; border-top: 1px solid var(--line-soft); }
+  section:first-of-type { border-top: 0; padding-top: 0; }
+  .sec-head { display: flex; gap: 1rem; align-items: baseline; margin-bottom: .35rem; }
+  .sec-num {
+    font-family: var(--f-mono);
+    font-size: .78rem;
+    color: var(--leaf);
+    padding-top: .2em;
+    flex: none;
+  }
+  h2 {
+    font-family: var(--f-display);
+    font-weight: 600;
+    font-size: clamp(1.5rem, 3.4vw, 2rem);
+    line-height: 1.15;
+    letter-spacing: -.015em;
+    margin: 0;
+    text-wrap: balance;
+  }
+  h3 {
+    font-family: var(--f-body);
+    font-weight: 600;
+    font-size: 1.02rem;
+    letter-spacing: -.005em;
+    margin: 2.1rem 0 .6rem;
+  }
+  h4 {
+    font-family: var(--f-mono);
+    font-weight: 500;
+    font-size: .72rem;
+    letter-spacing: .13em;
+    text-transform: uppercase;
+    color: var(--text-3);
+    margin: 1.6rem 0 .5rem;
+  }
+  p { max-width: var(--measure); margin: .85rem 0; }
+  .lede { color: var(--text-2); font-size: 1rem; max-width: 62ch; margin-top: .65rem; }
+  ul, ol.body-list { max-width: var(--measure); padding-left: 1.15rem; margin: .8rem 0; }
+  li { margin: .3rem 0; }
+  strong { font-weight: 600; }
+  code:not(pre code) {
+    font-family: var(--f-mono);
+    font-size: .86em;
+    background: var(--surface-3);
+    padding: .1em .36em;
+    border-radius: 3px;
+    color: var(--text);
+  }
+  a { color: var(--leaf); }
+
+  /* ---------- plates: diagrams & code ---------- */
+  .plate {
+    margin: 1.4rem 0;
+    border: 1px solid var(--plate-line);
+    border-radius: 8px;
+    background: var(--plate);
+    overflow-x: auto;
+    padding: 1.25rem;
+  }
+  .plate .mermaid { min-width: 0; }
+  .plate-cap {
+    font-family: var(--f-mono);
+    font-size: .7rem;
+    letter-spacing: .1em;
+    text-transform: uppercase;
+    color: var(--text-3);
+    margin: .5rem 0 0;
+  }
+  pre.code {
+    margin: 1.1rem 0;
+    padding: 1rem 1.1rem;
+    background: var(--ink);
+    color: #D9E5DE;
+    border-radius: 8px;
+    overflow-x: auto;
+    font-family: var(--f-mono);
+    font-size: .8rem;
+    line-height: 1.65;
+    border: 1px solid var(--ink-2);
+  }
+  pre.code .c { color: #7E9A8B; }
+  pre.code .k { color: #7FD3A6; }
+  pre.code .s { color: #E6B96A; }
+  pre.tree {
+    margin: 1.1rem 0;
+    padding: 1rem 1.1rem;
+    background: var(--surface-2);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    overflow-x: auto;
+    font-family: var(--f-mono);
+    font-size: .78rem;
+    line-height: 1.6;
+    color: var(--text);
+  }
+  pre.tree .cm { color: var(--text-3); }
+  pre.tree .hi { color: var(--leaf); font-weight: 600; }
+
+  /* ---------- tables ---------- */
+  .table-wrap { overflow-x: auto; margin: 1.2rem 0; border: 1px solid var(--line); border-radius: 8px; background: var(--surface-2); }
+  table { border-collapse: collapse; width: 100%; font-size: .85rem; min-width: 34rem; }
+  th, td { text-align: left; padding: .6rem .8rem; border-bottom: 1px solid var(--line-soft); vertical-align: top; }
+  th {
+    font-family: var(--f-mono);
+    font-size: .68rem;
+    letter-spacing: .1em;
+    text-transform: uppercase;
+    color: var(--text-3);
+    font-weight: 500;
+    background: var(--surface-3);
+    white-space: nowrap;
+  }
+  tr:last-child td { border-bottom: 0; }
+  td code { white-space: nowrap; }
+  .num { font-variant-numeric: tabular-nums; }
+
+  /* ---------- decision chips ---------- */
+  .chips { display: flex; flex-wrap: wrap; gap: .45rem; margin-top: 1.5rem; }
+  .chip {
+    font-family: var(--f-mono);
+    font-size: .7rem;
+    letter-spacing: .04em;
+    padding: .32rem .6rem;
+    border-radius: 4px;
+    background: var(--surface-2);
+    border: 1px solid var(--line);
+    color: var(--text-2);
+  }
+  .chip b { color: var(--text); font-weight: 600; }
+
+  /* ---------- callouts ---------- */
+  .note {
+    margin: 1.3rem 0;
+    padding: .9rem 1.05rem;
+    border-radius: 6px;
+    font-size: .89rem;
+    max-width: 66ch;
+    border: 1px solid var(--line);
+    background: var(--surface-2);
+  }
+  .note.flag { border-color: color-mix(in srgb, var(--saffron) 40%, transparent); background: var(--saffron-soft); }
+  .note.risk { border-color: color-mix(in srgb, var(--clay) 40%, transparent); background: var(--clay-soft); }
+  .note.key  { border-color: color-mix(in srgb, var(--leaf) 40%, transparent); background: var(--leaf-soft); }
+  .note .tag {
+    font-family: var(--f-mono);
+    font-size: .66rem;
+    letter-spacing: .12em;
+    text-transform: uppercase;
+    display: block;
+    margin-bottom: .3rem;
+  }
+  .note.flag .tag { color: var(--saffron); }
+  .note.risk .tag { color: var(--clay); }
+  .note.key .tag  { color: var(--leaf); }
+  .note p { margin: .4rem 0 0; max-width: none; }
+  .note p:first-of-type { margin-top: 0; }
+
+  /* ---------- decision list ---------- */
+  .decisions { display: grid; gap: .55rem; margin: 1.3rem 0; }
+  .decision {
+    display: grid;
+    grid-template-columns: 1.6rem 1fr;
+    gap: .75rem;
+    padding: .85rem 1rem;
+    background: var(--surface-2);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    font-size: .89rem;
+  }
+  .decision .d-n { font-family: var(--f-mono); font-size: .72rem; color: var(--saffron); padding-top: .25em; }
+  .decision b { display: block; margin-bottom: .15rem; }
+  .decision span.why { color: var(--text-2); }
+
+  /* ---------- status strip ---------- */
+  .flow-strip {
+    display: flex;
+    flex-wrap: wrap;
+    gap: .4rem;
+    align-items: center;
+    margin: 1.2rem 0;
+    font-family: var(--f-mono);
+    font-size: .7rem;
+    letter-spacing: .05em;
+  }
+  .flow-strip span.st {
+    padding: .3rem .55rem;
+    border-radius: 4px;
+    background: var(--surface-3);
+    border: 1px solid var(--line);
+    white-space: nowrap;
+  }
+  .flow-strip span.st.on { background: var(--leaf-soft); border-color: color-mix(in srgb, var(--leaf) 45%, transparent); color: var(--leaf); }
+  .flow-strip span.ar { color: var(--text-3); }
+
+  /* ---------- phases ---------- */
+  .phases { display: grid; gap: .4rem; margin: 1.2rem 0; }
+  .phase {
+    display: grid;
+    grid-template-columns: 4.2rem 1fr;
+    gap: .9rem;
+    padding: .6rem .8rem;
+    border-radius: 5px;
+    border: 1px solid var(--line-soft);
+    background: var(--surface-2);
+    font-size: .86rem;
+    align-items: baseline;
+  }
+  .phase .p-n { font-family: var(--f-mono); font-size: .7rem; color: var(--leaf); letter-spacing: .06em; }
+  .phase.done { border-color: color-mix(in srgb, var(--leaf) 45%, transparent); background: var(--leaf-soft); }
+
+  footer.end {
+    grid-column: 1 / -1;
+    border-top: 1px solid var(--line);
+    margin-top: 3rem;
+    padding-top: 1.5rem;
+    font-size: .8rem;
+    color: var(--text-3);
+    font-family: var(--f-mono);
+    letter-spacing: .04em;
+  }
+
+  @media (max-width: 900px) {
+    .shell { grid-template-columns: minmax(0, 1fr); gap: 0; }
+    nav.rail {
+      position: static;
+      max-height: none;
+      padding-block: 1.5rem 0;
+      border-bottom: 1px solid var(--line-soft);
+      margin-bottom: 1.5rem;
+    }
+    .rail ol { flex-direction: row; flex-wrap: wrap; gap: .3rem; }
+    .rail a { grid-template-columns: auto; padding: .3rem .5rem; border: 1px solid var(--line); border-radius: 4px; font-size: .78rem; }
+    .rail a .n { display: none; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    * { animation: none !important; transition: none !important; }
+  }
+</style>
+
+<div class="shell">
+
+  <header class="mast">
+    <div class="eyebrow">
+      <span>Phase 0 &middot; Technical Design</span><span class="sep">/</span>
+      <span>For review before Phase 1</span><span class="sep">/</span>
+      <span>14 Sep 2026</span>
+    </div>
+    <h1>Mylapore&nbsp;Bites Platform Architecture</h1>
+    <p class="standfirst">One backend, one database, one admin platform &mdash; serving mylaporebites.com and mylaporebites.co.uk as two storefronts of a single system.</p>
+    <div class="thesis">
+      <strong>The whole platform is organised around one fact:</strong> most of what you sell does not exist when the order is placed. An order is not a claim on stock &mdash; it is a <em>reservation against a future day&rsquo;s production capacity in the Mylapore kitchen</em>. Capacity is therefore a first-class, transactional, server-owned resource, on the same footing as money. Every other module &mdash; catalogue, cart, checkout, delivery, notifications &mdash; is built around that reservation.
+    </div>
+    <div class="chips">
+      <span class="chip"><b>API</b> NestJS + TypeScript</span>
+      <span class="chip"><b>Web</b> Next.js 15</span>
+      <span class="chip"><b>DB</b> PostgreSQL 17 + Prisma</span>
+      <span class="chip"><b>Queue</b> BullMQ + Redis</span>
+      <span class="chip"><b>Pay IN</b> Razorpay</span>
+      <span class="chip"><b>Pay UK</b> Stripe</span>
+      <span class="chip"><b>Msg</b> WhatsApp Cloud API</span>
+      <span class="chip"><b>Host</b> VPS + Docker</span>
+    </div>
+  </header>
+
+  <nav class="rail" aria-label="Sections">
+    <div class="rail-brand">Contents</div>
+    <ol>
+      <li><a href="#s0"><span class="n">00</span><span>Decisions &amp; deviations</span></a></li>
+      <li><a href="#s1"><span class="n">01</span><span>System architecture</span></a></li>
+      <li><a href="#s2"><span class="n">02</span><span>Monorepo structure</span></a></li>
+      <li><a href="#s3"><span class="n">03</span><span>Database ERD</span></a></li>
+      <li><a href="#s4"><span class="n">04</span><span>Main tables</span></a></li>
+      <li><a href="#s5"><span class="n">05</span><span>Pre-order &amp; capacity engine</span></a></li>
+      <li><a href="#s6"><span class="n">06</span><span>Production workflow</span></a></li>
+      <li><a href="#s7"><span class="n">07</span><span>Delivery workflow</span></a></li>
+      <li><a href="#s8"><span class="n">08</span><span>Auth &amp; security</span></a></li>
+      <li><a href="#s9"><span class="n">09</span><span>API route structure</span></a></li>
+      <li><a href="#s10"><span class="n">10</span><span>Deployment &amp; FastHosts</span></a></li>
+      <li><a href="#s11"><span class="n">11</span><span>Roadmap &amp; sign-off</span></a></li>
+    </ol>
+  </nav>
+
+  <main>
+
+    <!-- ============ 00 ============ -->
+    <section id="s0">
+      <div class="sec-head"><span class="sec-num">00</span><h2>Decisions locked, and five I need you to approve</h2></div>
+      <p class="lede">Your four answers are settled and built into everything below. Five further calls deviate from the structure sketched in the brief &mdash; each buys something concrete, and each is reversible now and expensive later.</p>
+
+      <h4>Locked from your answers</h4>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Area</th><th>Decision</th><th>Consequence in this design</th></tr></thead>
+          <tbody>
+            <tr><td>Backend</td><td>NestJS standalone API</td><td>Storefront and admin are pure clients. No business logic in Next.js.</td></tr>
+            <tr><td>Infrastructure</td><td>Single VPS + Docker; FastHosts for DNS only</td><td>Everything ships as containers, so the host is swappable.</td></tr>
+            <tr><td>India payments</td><td>Razorpay behind <code>PaymentProvider</code></td><td>Stripe/UK slots in without touching checkout.</td></tr>
+            <tr><td>WhatsApp</td><td>Meta Cloud API behind <code>NotificationProvider</code></td><td>A BSP can replace it by config later.</td></tr>
+            <tr><td>Extensibility</td><td>UK market must not require core changes</td><td>Market is a row, never a branch in code.</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h4>Deviations for your approval</h4>
+      <div class="decisions">
+        <div class="decision"><span class="d-n">D1</span><div>
+          <b>Worker is a second entry point of the API codebase, not a separate <code>apps/worker</code> project.</b>
+          <span class="why">Your sketch had <code>apps/worker/src/</code> duplicating the module tree. Jobs need the same services as HTTP requests &mdash; the production engine, the pricing service, the Prisma client. Splitting them into two projects means either duplicating that code or building a third shared package and fighting circular imports. Instead: one codebase, two bootstrap files (<code>main.ts</code>, <code>worker.ts</code>), one Docker image, two containers with different commands. Identical deployment shape, none of the duplication.</span>
+        </div></div>
+        <div class="decision"><span class="d-n">D2</span><div>
+          <b>Domain logic lives in <code>apps/api/src/modules/*</code>, not in <code>packages/production</code>, <code>packages/delivery</code> etc.</b>
+          <span class="why">Packages that import Prisma and each other become a dependency graph you maintain instead of features. <code>packages/*</code> holds only genuinely cross-app code: Prisma client, shared types and Zod contracts, the generated API SDK, UI primitives, tooling config. If a domain module ever needs to be reused outside the API, extracting it then is a mechanical move.</span>
+        </div></div>
+        <div class="decision"><span class="d-n">D3</span><div>
+          <b>One storefront container serves both domains.</b>
+          <span class="why">Not two Next.js apps. Middleware resolves <code>Host</code> to a market and the whole app renders from that. This is what structurally prevents the two sites drifting apart &mdash; the failure mode your brief is most concerned with. Theming and copy differences are data, not forks.</span>
+        </div></div>
+        <div class="decision"><span class="d-n">D4</span><div>
+          <b>OTP gets an SMS fallback channel from day one.</b>
+          <span class="why">WhatsApp-only login means anyone without WhatsApp, or with a delivery failure, simply cannot log in &mdash; and you would only discover it as unexplained checkout drop-off. Same <code>OtpChannel</code> interface, WhatsApp primary, SMS (MSG91 or Twilio) automatic on non-delivery after ~30s. Cheap now; a rewrite of the auth flow later.</span>
+        </div></div>
+        <div class="decision"><span class="d-n">D5</span><div>
+          <b>Object storage is Cloudflare R2, not a MinIO container.</b>
+          <span class="why">Product images are the heaviest thing on a food site. R2 is S3-compatible, has no egress charges, and puts images on a CDN edge in Chennai and London without you running or backing up another stateful service on the VPS. The <code>StorageProvider</code> interface keeps MinIO available for local development.</span>
+        </div></div>
+      </div>
+
+      <div class="note flag">
+        <span class="tag">Needs a decision from you</span>
+        <p><b>VPS region.</b> Your launch market is Chennai, but Hetzner &mdash; the cheapest option &mdash; has no India region. Section 10 lays out the trade-off. I need your call before anything is provisioned.</p>
+      </div>
+    </section>
+
+    <!-- ============ 01 ============ -->
+    <section id="s1">
+      <div class="sec-head"><span class="sec-num">01</span><h2>System architecture</h2></div>
+      <p class="lede">Two domains, one storefront application, one API, one database. The domain selects a <code>Market</code> row; nothing else about the request differs.</p>
+
+      <div class="plate">
+<pre class="mermaid">
+flowchart TB
+  subgraph EDGE["Edge — Cloudflare"]
+    D1["mylaporebites.com"]
+    D2["mylaporebites.co.uk"]
+    D3["admin.mylaporebites.com"]
+  end
+
+  subgraph VPS["VPS — Docker Compose"]
+    PROXY["Caddy&lt;br/&gt;TLS · reverse proxy"]
+    SF["Storefront&lt;br/&gt;Next.js · both domains"]
+    AD["Admin&lt;br/&gt;Next.js"]
+    API["NestJS API&lt;br/&gt;domain modules"]
+    WK["Worker&lt;br/&gt;BullMQ consumers"]
+    PG[("PostgreSQL 17")]
+    RD[("Redis&lt;br/&gt;cache · queues · rate limit")]
+  end
+
+  subgraph EXT["External services"]
+    RZP["Razorpay"]
+    STR["Stripe"]
+    WA["WhatsApp Cloud API"]
+    SMS["SMS fallback"]
+    MAIL["Email — Resend/SES"]
+    R2["Cloudflare R2&lt;br/&gt;images · exports"]
+    BK["Encrypted backups"]
+  end
+
+  D1 --> PROXY
+  D2 --> PROXY
+  D3 --> PROXY
+  PROXY --> SF
+  PROXY --> AD
+  PROXY --> API
+  SF -->|"REST + X-Market"| API
+  AD -->|"REST + admin JWT"| API
+  API --> PG
+  API --> RD
+  WK --> PG
+  WK --> RD
+  API -.->|"enqueue"| RD
+  RD -.->|"consume"| WK
+  WK --> WA
+  WK --> SMS
+  WK --> MAIL
+  API --> RZP
+  API --> STR
+  RZP -.->|"webhook"| API
+  STR -.->|"webhook"| API
+  API --> R2
+  SF --> R2
+  PG --> BK
+</pre>
+        <p class="plate-cap">Fig. 1 — Runtime topology. Dotted edges are asynchronous.</p>
+      </div>
+
+      <h3>The rule that keeps it one platform</h3>
+      <p>Every request carries a market, resolved server-side from the hostname. Market is never a conditional in application code &mdash; it is a foreign key on the rows that differ.</p>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Varies by market</th><th>Mechanism</th><th>Never varies</th></tr></thead>
+          <tbody>
+            <tr><td>Price, currency</td><td><code>market_product_variant.price</code></td><td>Product identity, SKU, recipe</td></tr>
+            <tr><td>Tax treatment</td><td><code>tax_rate</code> per market + tax class</td><td>Order lifecycle and statuses</td></tr>
+            <tr><td>Payment provider</td><td><code>market.payment_provider</code></td><td>Payment state machine</td></tr>
+            <tr><td>Delivery zones, fees, slots</td><td><code>delivery_zone</code> rows</td><td>Delivery engine logic</td></tr>
+            <tr><td>Which products are sold</td><td><code>market_product.is_active</code></td><td>Catalogue schema</td></tr>
+            <tr><td>Production centre</td><td><code>market.default_warehouse_id</code></td><td>Capacity reservation algorithm</td></tr>
+            <tr><td>Locale, timezone, copy</td><td><code>market</code> + CMS content rows</td><td>Storefront components</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="note key">
+        <span class="tag">Design guardrail</span>
+        <p>Adding the USA in 2027 should be: insert a <code>market</code> row, insert delivery zones, set prices, point a domain at the proxy. If it ever requires a code change, something has been modelled wrong &mdash; and that is the test to apply to every pull request.</p>
+      </div>
+
+      <h3>Layering inside the API</h3>
+      <p>Each domain module is <code>controller → service → repository</code>. Controllers validate input and nothing else; services hold business rules and own transactions; only repositories touch Prisma. Cross-cutting concerns &mdash; market resolution, permissions, rate limiting, idempotency, audit &mdash; are Nest guards and interceptors registered once, never repeated per handler.</p>
+    </section>
+
+    <!-- ============ 02 ============ -->
+    <section id="s2">
+      <div class="sec-head"><span class="sec-num">02</span><h2>Monorepo structure</h2></div>
+      <p class="lede">pnpm workspaces + Turborepo. Four deployable apps, five shared packages.</p>
+
+<pre class="tree">mylapore-bites/
+├── apps/
+│   ├── storefront/          <span class="cm"># Next.js 15 · serves .com AND .co.uk</span>
+│   │   ├── middleware.ts    <span class="cm"># Host → market resolution</span>
+│   │   └── src/app/(shop)/  <span class="cm"># home, category, product, cart, checkout, account</span>
+│   ├── admin/               <span class="cm"># Next.js 15 · admin.mylaporebites.com</span>
+│   └── api/                 <span class="cm"># NestJS · HTTP + worker entry points</span>
+│       └── src/
+│           ├── main.ts              <span class="cm"># HTTP bootstrap</span>
+│           ├── worker.ts            <span class="cm"># BullMQ bootstrap (same modules)</span>
+│           ├── common/              <span class="cm"># guards, interceptors, filters, decorators</span>
+│           │   ├── market/          <span class="cm"># MarketResolverMiddleware</span>
+│           │   ├── rbac/            <span class="cm"># PermissionsGuard + @RequirePermission</span>
+│           │   ├── idempotency/
+│           │   └── audit/
+│           └── modules/
+│               ├── auth/            <span class="cm"># OTP, sessions, refresh rotation</span>
+│               ├── customers/
+│               ├── markets/
+│               ├── catalog/         <span class="cm"># products, variants, categories, media</span>
+│               ├── pricing/         <span class="cm"># price + tax + discount resolution</span>
+│               ├── cart/
+│               ├── availability/    <span class="hi"># date engine — what can be delivered when</span>
+│               ├── capacity/        <span class="hi"># reservations — the core of the platform</span>
+│               ├── checkout/
+│               ├── orders/
+│               ├── payments/        <span class="cm"># PaymentService + Razorpay/Stripe providers</span>
+│               ├── delivery/        <span class="cm"># zones, slots, routing, fees</span>
+│               ├── production/      <span class="hi"># plans, batches, production sheet</span>
+│               ├── packing/
+│               ├── inventory/       <span class="cm"># finished goods, ingredients, movements</span>
+│               ├── notifications/   <span class="cm"># outbox + WhatsApp/SMS/Email providers</span>
+│               ├── reviews/
+│               ├── discounts/
+│               ├── reports/
+│               ├── imports/         <span class="cm"># CSV import/export pipeline</span>
+│               └── admin/           <span class="cm"># admin users, roles, permissions, settings</span>
+├── packages/
+│   ├── database/            <span class="cm"># prisma schema, migrations, seed, generated client</span>
+│   ├── contracts/           <span class="cm"># Zod schemas + TS types shared API ↔ web</span>
+│   ├── sdk/                 <span class="cm"># typed API client generated from OpenAPI</span>
+│   ├── ui/                  <span class="cm"># design system primitives shared by both Next apps</span>
+│   └── config/              <span class="cm"># eslint, tsconfig, tailwind presets</span>
+├── docker/
+│   ├── Dockerfile.api       <span class="cm"># one image → api + worker containers</span>
+│   ├── Dockerfile.web       <span class="cm"># multi-target: storefront | admin</span>
+│   ├── docker-compose.yml           <span class="cm"># local development</span>
+│   ├── docker-compose.prod.yml      <span class="cm"># VPS production</span>
+│   └── Caddyfile
+├── docs/                    <span class="cm"># this document, ADRs, runbooks, DR plan</span>
+├── tests/e2e/               <span class="cm"># Playwright — customer + admin journeys</span>
+├── .env.example
+├── turbo.json
+└── pnpm-workspace.yaml</pre>
+
+      <div class="note">
+        <span class="tag">Why <code>contracts</code> matters</span>
+        <p>One Zod schema per request/response shape, imported by both the NestJS validation pipe and the Next.js form. The storefront cannot construct a request the API would reject, and a breaking API change fails at compile time in the storefront rather than at runtime in a customer&rsquo;s checkout.</p>
+      </div>
+    </section>
+
+    <!-- ============ 03 ============ -->
+    <section id="s3">
+      <div class="sec-head"><span class="sec-num">03</span><h2>Database ERD</h2></div>
+      <p class="lede">Split by domain for legibility. Everything is one PostgreSQL database with enforced foreign keys.</p>
+
+      <h3>Catalogue and market</h3>
+      <div class="plate">
+<pre class="mermaid">
+erDiagram
+  MARKET ||--o{ MARKET_DOMAIN : "resolves from"
+  MARKET ||--o{ MARKET_PRODUCT : "sells"
+  MARKET ||--o{ TAX_RATE : "applies"
+  MARKET }o--|| WAREHOUSE : "produces at"
+  CATEGORY ||--o{ CATEGORY : "parent of"
+  CATEGORY ||--o{ PRODUCT_CATEGORY : "groups"
+  PRODUCT ||--o{ PRODUCT_CATEGORY : "in"
+  PRODUCT ||--o{ PRODUCT_VARIANT : "sold as"
+  PRODUCT ||--o{ PRODUCT_IMAGE : "shown by"
+  PRODUCT }o--|| TAX_CLASS : "taxed as"
+  PRODUCT_VARIANT ||--o{ MARKET_PRODUCT_VARIANT : "priced per market"
+  MARKET_PRODUCT ||--o{ MARKET_PRODUCT_VARIANT : "contains"
+  PRODUCT_VARIANT ||--o{ VARIANT_PRODUCTION_RULE : "made under"
+
+  MARKET {
+    uuid id PK
+    string code "IN, UK"
+    string currency
+    string timezone
+    string payment_provider
+    uuid default_warehouse_id FK
+  }
+  PRODUCT {
+    uuid id PK
+    string slug UK
+    string stock_mode "STOCKED|FRESH_PREORDER|LIMITED_DAILY|PREORDER_ONLY"
+    jsonb allergens
+    jsonb nutrition
+  }
+  PRODUCT_VARIANT {
+    uuid id PK
+    string sku UK
+    decimal pack_size
+    string unit
+    int shelf_life_days
+  }
+  VARIANT_PRODUCTION_RULE {
+    uuid id PK
+    int lead_time_days
+    time cutoff_time
+    int cutoff_offset_days
+    int[] delivery_weekdays
+    int daily_capacity
+    int min_qty
+    int max_qty
+  }
+  MARKET_PRODUCT_VARIANT {
+    uuid id PK
+    decimal price
+    decimal compare_at_price
+    bool is_active
+  }
+</pre>
+        <p class="plate-cap">Fig. 2 — One product, many markets. No duplicate product tables.</p>
+      </div>
+
+      <h3>The pre-order core: capacity and reservations</h3>
+      <div class="plate">
+<pre class="mermaid">
+erDiagram
+  WAREHOUSE ||--o{ PRODUCTION_CAPACITY : "has capacity"
+  PRODUCT_VARIANT ||--o{ PRODUCTION_CAPACITY : "for"
+  PRODUCTION_CAPACITY ||--o{ CAPACITY_RESERVATION : "consumed by"
+  CART ||--o{ CAPACITY_RESERVATION : "holds"
+  ORDER ||--o{ CAPACITY_RESERVATION : "confirms"
+  PRODUCTION_CAPACITY ||--o| PRODUCTION_PLAN_ITEM : "rolls up to"
+  PRODUCTION_PLAN ||--o{ PRODUCTION_PLAN_ITEM : "contains"
+  PRODUCTION_PLAN_ITEM ||--o{ PRODUCTION_BATCH : "fulfilled by"
+  PRODUCTION_BATCH ||--o{ BATCH_INGREDIENT_USE : "consumes"
+  BLACKOUT_DATE }o--|| WAREHOUSE : "closes"
+
+  PRODUCTION_CAPACITY {
+    uuid id PK
+    uuid warehouse_id FK
+    uuid variant_id FK
+    date production_date
+    int capacity_units
+    int reserved_units
+    int produced_units
+    string status "OPEN|LOCKED|CLOSED"
+  }
+  CAPACITY_RESERVATION {
+    uuid id PK
+    uuid capacity_id FK
+    uuid cart_id FK "nullable"
+    uuid order_id FK "nullable"
+    int qty
+    string status "HELD|CONFIRMED|CONSUMED|RELEASED"
+    timestamptz expires_at
+  }
+  PRODUCTION_PLAN {
+    uuid id PK
+    date production_date
+    string status "PLANNED|IN_PROGRESS|COMPLETED"
+  }
+  PRODUCTION_BATCH {
+    uuid id PK
+    string batch_code UK
+    int required_qty
+    int produced_qty
+    int wastage_qty
+    date best_before
+    string status "PLANNED|IN_PROGRESS|READY|QUALITY_CHECK|COMPLETED|CANCELLED"
+    uuid responsible_staff_id FK
+  }
+</pre>
+        <p class="plate-cap">Fig. 3 — Capacity is a row per (kitchen, variant, day). Reservations are the only way to consume it.</p>
+      </div>
+
+      <h3>Customer, cart, order, payment</h3>
+      <div class="plate">
+<pre class="mermaid">
+erDiagram
+  CUSTOMER ||--o{ ADDRESS : "saves"
+  CUSTOMER ||--o{ CART : "owns"
+  CUSTOMER ||--o{ ORDER : "places"
+  CUSTOMER ||--o{ REVIEW : "writes"
+  CUSTOMER ||--o{ AUTH_SESSION : "signed in via"
+  CUSTOMER ||--o{ OTP_CHALLENGE : "verifies with"
+  CART ||--o{ CART_ITEM : "contains"
+  ORDER ||--o{ ORDER_ITEM : "contains"
+  ORDER ||--o{ ORDER_STATUS_HISTORY : "transitions"
+  ORDER ||--o{ PAYMENT : "paid by"
+  ORDER ||--o{ SHIPMENT : "delivered as"
+  ORDER ||--o{ NOTIFICATION : "notifies"
+  ORDER }o--|| DELIVERY_SLOT_ALLOCATION : "occupies"
+  PAYMENT ||--o{ PAYMENT_TRANSACTION : "records"
+  ORDER_ITEM }o--|| PRODUCT_VARIANT : "of"
+  REVIEW }o--|| ORDER_ITEM : "verified by"
+  COUPON ||--o{ ORDER : "discounts"
+
+  CUSTOMER {
+    uuid id PK
+    string customer_ref UK "MBC-000123"
+    string phone_e164 UK
+    string email
+    bool phone_verified
+    string segment
+  }
+  ORDER {
+    uuid id PK
+    string order_number UK "MB-IND-20260914-000123"
+    uuid market_id FK
+    date delivery_date
+    uuid delivery_slot_id FK
+    jsonb address_snapshot
+    decimal subtotal
+    decimal discount_total
+    decimal delivery_fee
+    decimal tax_total
+    decimal grand_total
+    string status
+    string payment_status
+    string production_status
+    string fulfilment_status
+  }
+  ORDER_ITEM {
+    uuid id PK
+    string sku_snapshot
+    string name_snapshot
+    decimal unit_price_snapshot
+    int qty
+    decimal tax_rate_snapshot
+  }
+  PAYMENT {
+    uuid id PK
+    string provider
+    string provider_ref
+    string status "PENDING|AUTHORIZED|PAID|FAILED|REFUNDED|PARTIALLY_REFUNDED"
+    decimal amount
+  }
+</pre>
+        <p class="plate-cap">Fig. 4 — Orders snapshot everything. Editing a product or address never rewrites history.</p>
+      </div>
+
+      <h3>Delivery, inventory, notifications, admin</h3>
+      <div class="plate">
+<pre class="mermaid">
+erDiagram
+  MARKET ||--o{ DELIVERY_ZONE : "serves"
+  DELIVERY_ZONE ||--o{ ZONE_POSTCODE : "covers"
+  DELIVERY_ZONE ||--o{ DELIVERY_SLOT : "offers"
+  DELIVERY_SLOT ||--o{ DELIVERY_SLOT_ALLOCATION : "booked by"
+  WAREHOUSE ||--o{ INVENTORY_ITEM : "stocks"
+  INVENTORY_ITEM ||--o{ INVENTORY_MOVEMENT : "changed by"
+  INGREDIENT ||--o{ INVENTORY_ITEM : "tracked as"
+  NOTIFICATION }o--|| NOTIFICATION_TEMPLATE : "renders"
+  ADMIN_USER ||--o{ ADMIN_USER_ROLE : "assigned"
+  ROLE ||--o{ ADMIN_USER_ROLE : "grants"
+  ROLE ||--o{ ROLE_PERMISSION : "includes"
+  PERMISSION ||--o{ ROLE_PERMISSION : "in"
+  ADMIN_USER ||--o{ AUDIT_LOG : "acts"
+
+  DELIVERY_ZONE {
+    uuid id PK
+    string name
+    jsonb polygon
+    decimal delivery_fee
+    decimal min_order_value
+    decimal free_delivery_threshold
+    int[] service_weekdays
+    bool is_active
+  }
+  DELIVERY_SLOT {
+    uuid id PK
+    int weekday
+    time start_time
+    time end_time
+    int max_orders
+  }
+  INVENTORY_MOVEMENT {
+    uuid id PK
+    string reason "PURCHASE|PRODUCTION_IN|PRODUCTION_CONSUME|SALE|WASTAGE|ADJUSTMENT"
+    decimal qty_delta
+    uuid reference_id
+  }
+  NOTIFICATION {
+    uuid id PK
+    string channel "WHATSAPP|SMS|EMAIL"
+    string event_key
+    string status "PENDING|SENT|DELIVERED|FAILED"
+    int attempts
+    timestamptz next_attempt_at
+  }
+  AUDIT_LOG {
+    uuid id PK
+    string entity
+    string action
+    jsonb before
+    jsonb after
+    inet ip
+  }
+</pre>
+        <p class="plate-cap">Fig. 5 — Operational domains. Inventory changes only ever through movements.</p>
+      </div>
+    </section>
+
+    <!-- ============ 04 ============ -->
+    <section id="s4">
+      <div class="sec-head"><span class="sec-num">04</span><h2>Main tables</h2></div>
+      <p class="lede">Roughly 52 tables at V1. The ones that carry the business rules are marked.</p>
+
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Domain</th><th>Tables</th><th>Notes</th></tr></thead>
+          <tbody>
+            <tr><td>Market</td><td><code>market</code>, <code>market_domain</code>, <code>tax_class</code>, <code>tax_rate</code>, <code>setting</code></td><td>Host → market. Settings are key/value per market, so no config is compiled in.</td></tr>
+            <tr><td>Catalogue</td><td><code>category</code>, <code>product</code>, <code>product_variant</code>, <code>product_category</code>, <code>product_image</code>, <code>market_product</code>, <code>market_product_variant</code></td><td>Self-referencing category tree with <code>sort_order</code>, SEO fields, and soft deactivate.</td></tr>
+            <tr><td><b>Pre-order</b></td><td><code>variant_production_rule</code>, <code>production_capacity</code>, <code>capacity_reservation</code>, <code>blackout_date</code></td><td><b>The heart of the system.</b> Section 05.</td></tr>
+            <tr><td>Production</td><td><code>warehouse</code>, <code>production_plan</code>, <code>production_plan_item</code>, <code>production_batch</code>, <code>batch_ingredient_use</code></td><td>Plans are generated, never hand-keyed.</td></tr>
+            <tr><td>Inventory</td><td><code>ingredient</code>, <code>inventory_item</code>, <code>inventory_movement</code>, <code>packaging_material</code></td><td>Quantity is derived from movements; never updated in place.</td></tr>
+            <tr><td>Customer</td><td><code>customer</code>, <code>address</code>, <code>otp_challenge</code>, <code>auth_session</code>, <code>customer_segment</code></td><td>Phone is the identity. Segments are rule rows, not enums in code.</td></tr>
+            <tr><td>Commerce</td><td><code>cart</code>, <code>cart_item</code>, <code>order</code>, <code>order_item</code>, <code>order_status_history</code>, <code>order_counter</code>, <code>idempotency_key</code></td><td>Order items snapshot name, SKU, price and tax rate.</td></tr>
+            <tr><td>Payment</td><td><code>payment</code>, <code>payment_transaction</code>, <code>refund</code>, <code>webhook_event</code></td><td><code>webhook_event</code> has a unique index on (provider, external_id) &mdash; that is the replay defence.</td></tr>
+            <tr><td>Delivery</td><td><code>delivery_zone</code>, <code>zone_postcode</code>, <code>delivery_slot</code>, <code>delivery_slot_allocation</code>, <code>shipment</code>, <code>delivery_event</code></td><td>Slot allocation uses the same atomic-reserve pattern as production capacity.</td></tr>
+            <tr><td>Discounts</td><td><code>coupon</code>, <code>coupon_redemption</code>, <code>promotion_rule</code></td><td>Redemption rows enforce per-customer usage limits transactionally.</td></tr>
+            <tr><td>Engagement</td><td><code>review</code>, <code>notification</code>, <code>notification_template</code></td><td>Reviews require a matching delivered <code>order_item</code>.</td></tr>
+            <tr><td>Admin</td><td><code>admin_user</code>, <code>role</code>, <code>permission</code>, <code>role_permission</code>, <code>admin_user_role</code>, <code>audit_log</code>, <code>import_job</code></td><td>Permissions are data. Roles are editable without a deploy.</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h4>Conventions applied throughout</h4>
+      <ul>
+        <li>UUIDv7 primary keys &mdash; time-sortable, safe to expose, no sequence contention.</li>
+        <li>Money as <code>NUMERIC(12,2)</code> with an explicit currency column. Never floats.</li>
+        <li>All timestamps <code>timestamptz</code> stored in UTC; business dates as <code>DATE</code> interpreted in the market&rsquo;s timezone.</li>
+        <li><code>created_at</code>, <code>updated_at</code>, and <code>deleted_at</code> (soft delete) on every catalogue and config table.</li>
+        <li>Enums as Postgres native types so the database rejects an invalid status, not just the application.</li>
+        <li>Indexes committed with the migration that needs them &mdash; notably <code>(warehouse_id, variant_id, production_date)</code> unique, <code>(market_id, status, delivery_date)</code> on orders, and trigram indexes on product name for search.</li>
+      </ul>
+    </section>
+
+    <!-- ============ 05 ============ -->
+    <section id="s5">
+      <div class="sec-head"><span class="sec-num">05</span><h2>Pre-order &amp; capacity engine</h2></div>
+      <p class="lede">This is the section to read closely. Everything your business depends on &mdash; not promising food you cannot cook &mdash; is decided here.</p>
+
+      <h3>What the customer experiences</h3>
+      <div class="flow-strip">
+        <span class="st on">Order by Thu 8:00 PM</span><span class="ar">→</span>
+        <span class="st">Prepared Fri</span><span class="ar">→</span>
+        <span class="st">Delivered Sat</span>
+      </div>
+      <p>None of those three dates is written anywhere in the frontend. They are computed from <code>variant_production_rule</code> for that exact variant, in the market&rsquo;s timezone, against live remaining capacity. Change the cut-off in Admin at 3pm and the product page reflects it on the next request.</p>
+
+      <h3>Four stock modes, one mechanism</h3>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Mode</th><th>Behaviour</th><th>Customer sees</th></tr></thead>
+          <tbody>
+            <tr><td><code>STOCKED</code></td><td>Sold from finished inventory. No capacity reservation.</td><td>&ldquo;In stock &middot; next delivery Tuesday&rdquo;</td></tr>
+            <tr><td><code>FRESH_PREORDER</code></td><td>Made to order. Reserves capacity on the production date.</td><td>&ldquo;Made fresh after you order&rdquo; + the three dates</td></tr>
+            <tr><td><code>LIMITED_DAILY</code></td><td>Made daily up to a cap; unsold stock carries no forward.</td><td>&ldquo;Only 12 left for Saturday&rdquo;</td></tr>
+            <tr><td><code>PREORDER_ONLY</code></td><td>Festival or seasonal item, explicit window.</td><td>&ldquo;Pre-order for Deepavali &middot; closes 3 Nov&rdquo;</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3>Preventing overbooking</h3>
+      <p>Two customers reach for the last five packs of Murukku at the same instant. The defence is not a lock held in application code &mdash; it is one statement that Postgres serialises for us:</p>
+
+<pre class="code"><span class="c">-- Atomic reserve. Returns zero rows if capacity is gone.</span>
+<span class="k">UPDATE</span> production_capacity
+<span class="k">SET</span>    reserved_units = reserved_units + $qty
+<span class="k">WHERE</span>  id = $capacity_id
+  <span class="k">AND</span>  status = <span class="s">'OPEN'</span>
+  <span class="k">AND</span>  reserved_units + $qty &lt;= capacity_units
+<span class="k">RETURNING</span> capacity_units - reserved_units <span class="k">AS</span> remaining;</pre>
+
+      <p>Under <code>READ COMMITTED</code>, the second transaction blocks on the row until the first commits, then re-evaluates its <code>WHERE</code> clause against the updated row. It cannot see stale data and cannot over-reserve. Zero rows returned is not an error &mdash; it is the domain signalling &ldquo;full&rdquo;, and the service answers with the next available date rather than a failure.</p>
+
+      <div class="note key">
+        <span class="tag">The single most important test in the suite</span>
+        <p>Fire <i>N</i> concurrent checkouts against a capacity of <i>N&minus;1</i> and assert that exactly <i>N&minus;1</i> orders exist and <code>reserved_units</code> equals <code>capacity_units</code>. Run it against a real Postgres, not a mock. If that test is green, the business cannot promise food it cannot cook.</p>
+      </div>
+
+      <h3>Reservation lifecycle</h3>
+      <div class="plate">
+<pre class="mermaid">
+stateDiagram-v2
+  [*] --> HELD: customer picks delivery date&lt;br/&gt;TTL 15 min
+  HELD --> CONFIRMED: payment webhook = PAID
+  HELD --> RELEASED: TTL expires / payment fails&lt;br/&gt;/ cart abandoned
+  CONFIRMED --> CONSUMED: production batch completed
+  CONFIRMED --> RELEASED: order cancelled or refunded
+  RELEASED --> [*]
+  CONSUMED --> [*]
+</pre>
+        <p class="plate-cap">Fig. 6 — Capacity is only ever freed by an explicit, idempotent transition.</p>
+      </div>
+      <p>The hold is created when the customer selects a delivery date at checkout, not when they add to cart &mdash; holding capacity for browsing would strangle a small kitchen. A BullMQ delayed job releases the hold at <code>expires_at</code>; the release is written as a conditional update so a double-fire cannot double-decrement:</p>
+
+<pre class="code"><span class="k">UPDATE</span> capacity_reservation
+<span class="k">SET</span> status = <span class="s">'RELEASED'</span>, released_at = now()
+<span class="k">WHERE</span> id = $id <span class="k">AND</span> status = <span class="s">'HELD'</span>
+<span class="k">RETURNING</span> qty;   <span class="c">-- decrement reserved_units only if a row came back</span></pre>
+
+      <h3>The availability date engine</h3>
+      <p>Given a cart and an address, which dates can we actually honour? Every clause below reads from configuration.</p>
+
+<pre class="code"><span class="c">// availability/availability.service.ts — pseudocode</span>
+zone = resolveZone(address)                       <span class="c">// else NOT_SERVICEABLE</span>
+
+<span class="k">for</span> each date D in [today .. today + market.orderHorizonDays]:
+  <span class="k">if</span> D not in zone.serviceWeekdays          → skip
+  <span class="k">if</span> D in blackoutDates(market, warehouse) → skip
+
+  <span class="k">for</span> each cart line L:
+    rule = L.variant.productionRule
+    <span class="k">if</span> D not in rule.deliveryWeekdays      → reject D
+    P    = previousWorkingDay(D, rule.leadTimeDays, warehouse)
+    cut  = at(P - rule.cutoffOffsetDays, rule.cutoffTime, market.timezone)
+    <span class="k">if</span> now &gt; cut                           → reject D
+    <span class="k">if</span> remainingCapacity(P, L.variant) &lt; L.qty → reject D
+
+  <span class="k">if</span> slotsRemaining(zone, D) == 0          → reject D
+  accept D</pre>
+
+      <div class="note">
+        <span class="tag">Cart-level nuance worth designing for now</span>
+        <p>A cart&rsquo;s delivery dates are the <i>intersection</i> across its lines. Mix a shelf-stable pickle with a fresh murukku and the murukku decides. The API therefore returns, per rejected date, <b>which line item blocked it and why</b> &mdash; so the storefront can say &ldquo;Saturday is unavailable because Murukku (500g) is fully booked&rdquo; and offer to move that one item, instead of an opaque &ldquo;not available&rdquo;. This is the difference between a checkout that converts and one that does not.</p>
+      </div>
+
+      <p>Results are cached in Redis for 60 seconds keyed by zone and a cart fingerprint, and invalidated immediately on any capacity mutation, so the common browse case is cheap while the checkout case is always fresh.</p>
+    </section>
+
+    <!-- ============ 06 ============ -->
+    <section id="s6">
+      <div class="sec-head"><span class="sec-num">06</span><h2>Production workflow</h2></div>
+      <p class="lede">Confirmed orders become a kitchen worksheet automatically. Nobody retypes an order into a spreadsheet.</p>
+
+      <div class="plate">
+<pre class="mermaid">
+sequenceDiagram
+  autonumber
+  participant C as Customer
+  participant API as NestJS API
+  participant DB as PostgreSQL
+  participant W as Worker
+  participant PM as Production manager
+  participant K as Kitchen
+
+  C->>API: place order (Sat delivery)
+  API->>DB: BEGIN — reserve capacity, create order
+  DB-->>API: order MB-IND-20260914-000123
+  API-->>C: confirmation
+  W->>DB: capacity reservation CONFIRMED
+  Note over DB: Friday capacity for Murukku 500g&lt;br/&gt;reserved 90 / 100
+
+  Note over W: 21:00 nightly — plan generator
+  W->>DB: aggregate CONFIRMED reservations by (date, variant)
+  W->>DB: upsert production_plan + plan items
+  W->>PM: WhatsApp "Friday plan ready — 318 units"
+
+  PM->>API: open Friday plan, print production sheet
+  API-->>PM: PDF grouped by category, with ingredient totals
+  PM->>API: start batch → IN_PROGRESS
+  K->>API: produced 96, wastage 4 → READY
+  PM->>API: QC pass → COMPLETED (sets best_before)
+  API->>DB: inventory PRODUCTION_IN, reservations CONSUMED
+  API->>W: enqueue "production.completed" per affected order
+  W->>C: WhatsApp "Your order is freshly prepared"
+</pre>
+        <p class="plate-cap">Fig. 7 — Orders to kitchen sheet to customer notification, without manual re-entry.</p>
+      </div>
+
+      <h3>Batch statuses</h3>
+      <div class="flow-strip">
+        <span class="st">PLANNED</span><span class="ar">→</span>
+        <span class="st">IN_PROGRESS</span><span class="ar">→</span>
+        <span class="st">READY</span><span class="ar">→</span>
+        <span class="st">QUALITY_CHECK</span><span class="ar">→</span>
+        <span class="st on">COMPLETED</span>
+        <span class="ar">&nbsp;&nbsp;also:</span><span class="st">CANCELLED</span>
+      </div>
+
+      <h3>What the production manager sees</h3>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Product</th><th class="num">Required</th><th class="num">Capacity</th><th class="num">Remaining</th><th>Status</th></tr></thead>
+          <tbody>
+            <tr><td>Murukku &mdash; 500g</td><td class="num">90</td><td class="num">100</td><td class="num">10</td><td>PLANNED</td></tr>
+            <tr><td>Idli Podi &mdash; 200g</td><td class="num">60</td><td class="num">200</td><td class="num">140</td><td>PLANNED</td></tr>
+            <tr><td>Mango Thokku &mdash; 300g</td><td class="num">40</td><td class="num">50</td><td class="num">10</td><td>IN_PROGRESS</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="lede">Example figures &mdash; the live view is generated from confirmed reservations.</p>
+      <p>The printed sheet is a server-rendered PDF, grouped by preparation station, listing batch codes, target quantities, and &mdash; where ingredient recipes are configured &mdash; the rolled-up raw material requirement for the day. Under-production is handled honestly: if a batch completes at 96 of 100, the four short orders are flagged for the order manager with a one-click &ldquo;offer next delivery date or refund&rdquo; action rather than silently shipping short.</p>
+
+      <div class="note">
+        <span class="tag">V1 scope on ingredients</span>
+        <p>The tables (<code>ingredient</code>, <code>batch_ingredient_use</code>) and the movement types exist from Phase 1, and a batch can record consumption. Recipe-driven automatic deduction and purchase planning are deliberately left for later &mdash; the schema supports them, V1 does not ship them.</p>
+      </div>
+    </section>
+
+    <!-- ============ 07 ============ -->
+    <section id="s7">
+      <div class="sec-head"><span class="sec-num">07</span><h2>Delivery workflow</h2></div>
+      <p class="lede">Zones, slots and fees are rows. Chennai is simply the first set of rows.</p>
+
+      <div class="plate">
+<pre class="mermaid">
+flowchart LR
+  A["Address&lt;br/&gt;PIN + geo"] --> B{"Zone match?"}
+  B -->|"no"| X["Not serviceable&lt;br/&gt;capture PIN for demand data"]
+  B -->|"yes"| C["Zone rules&lt;br/&gt;fee · min order · free threshold"]
+  C --> D["Availability engine&lt;br/&gt;§05"]
+  D --> E["Dates × slots&lt;br/&gt;with remaining capacity"]
+  E --> F["Customer picks&lt;br/&gt;date + slot"]
+  F --> G["Atomic slot allocation"]
+  G --> H["Order confirmed"]
+  H --> I["Packing → Dispatch"]
+  I --> J["Out for delivery"]
+  J --> K["Delivered"]
+  J --> L["Failed → reschedule"]
+  L --> E
+</pre>
+        <p class="plate-cap">Fig. 8 — Zone resolution happens before dates, because an unserviceable address has no dates.</p>
+      </div>
+
+      <h3>Zone resolution order</h3>
+      <ol class="body-list">
+        <li><b>PIN code match</b> against <code>zone_postcode</code> &mdash; fast, exact, and enough for a Chennai launch.</li>
+        <li><b>Polygon containment</b> using the saved latitude/longitude, for areas where one PIN straddles two zones.</li>
+        <li><b>No match</b> &rarr; a friendly &ldquo;we&rsquo;re not in your area yet&rdquo;, and the PIN is recorded. That list is how you decide which suburb to open next.</li>
+      </ol>
+      <p>PostGIS is not required at V1 &mdash; point-in-polygon on a stored GeoJSON works fine at Chennai scale &mdash; but the column is <code>jsonb</code> so migrating to PostGIS later is additive.</p>
+
+      <h3>Fulfilment statuses</h3>
+      <div class="flow-strip">
+        <span class="st">WAITING</span><span class="ar">→</span><span class="st">PICKING</span><span class="ar">→</span><span class="st">PACKING</span><span class="ar">→</span><span class="st">QUALITY_CHECK</span><span class="ar">→</span><span class="st">PACKED</span><span class="ar">→</span><span class="st">ASSIGNED</span><span class="ar">→</span><span class="st">OUT_FOR_DELIVERY</span><span class="ar">→</span><span class="st on">DELIVERED</span>
+      </div>
+      <p>Plus <code>FAILED_DELIVERY</code> and <code>RESCHEDULED</code>, both of which loop back to date selection and re-run the capacity check &mdash; a rescheduled fresh item may need to be made again.</p>
+      <p>Order status, payment status, production status and fulfilment status are <b>four independent columns</b>, not one. An order can legitimately be <code>PAID</code> + <code>production COMPLETED</code> + <code>fulfilment PACKING</code>. Collapsing these into a single enum is the modelling mistake that forces a rewrite six months in.</p>
+
+      <div class="note">
+        <span class="tag">Driver app</span>
+        <p>Not in V1, as you specified. The <code>shipment</code> and <code>delivery_event</code> tables carry a nullable <code>driver_id</code> and accept GPS-stamped events, so a driver PWA is an additive feature rather than a schema migration.</p>
+      </div>
+    </section>
+
+    <!-- ============ 08 ============ -->
+    <section id="s8">
+      <div class="sec-head"><span class="sec-num">08</span><h2>Authentication &amp; security</h2></div>
+
+      <h3>Customer sign-in &mdash; WhatsApp OTP</h3>
+      <div class="plate">
+<pre class="mermaid">
+sequenceDiagram
+  autonumber
+  participant U as Customer
+  participant SF as Storefront
+  participant API as NestJS API
+  participant R as Redis
+  participant WA as WhatsApp Cloud API
+  participant S as SMS fallback
+
+  U->>SF: enter phone number
+  SF->>API: POST /auth/otp/request
+  API->>API: normalise to E.164
+  API->>R: rate limit — phone, IP, device
+  alt limit exceeded
+    API-->>SF: 429 with retry_after
+  else allowed
+    API->>API: crypto-random 6 digits
+    API->>API: store Argon2id hash + 5 min expiry + attempt counter
+    API->>WA: authentication template, copy-code button
+    WA-->>U: WhatsApp message
+    Note over API,S: no delivery callback in ~30s → SMS fallback
+    API->>S: same code by SMS
+  end
+  U->>SF: enter code
+  SF->>API: POST /auth/otp/verify
+  API->>API: constant-time compare, burn challenge
+  API-->>SF: access JWT (15 min) + refresh cookie (30 d, rotating)
+</pre>
+        <p class="plate-cap">Fig. 9 — The OTP itself is never stored in readable form and is single-use.</p>
+      </div>
+
+      <p>Meta requires OTP messages to use an approved <code>AUTHENTICATION</code>-category template with a copy-code, one-tap or zero-tap button, and expiry between 1 and 90 minutes. Template approval and Business Manager verification are external dependencies with real lead time &mdash; they should be started now, in parallel with Phase 1, not discovered in Phase 6.</p>
+
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Control</th><th>Setting</th></tr></thead>
+          <tbody>
+            <tr><td>OTP length / lifetime</td><td>6 digits, 5 minutes, single use, burned on success</td></tr>
+            <tr><td>Storage</td><td>Argon2id hash only; constant-time comparison</td></tr>
+            <tr><td>Attempts</td><td>5 per challenge, then the challenge is destroyed</td></tr>
+            <tr><td>Resend</td><td>60s cooldown; 5/hour per phone; 20/hour per IP; sliding window in Redis</td></tr>
+            <tr><td>Access token</td><td>JWT RS256, 15 minutes, market-scoped claim</td></tr>
+            <tr><td>Refresh token</td><td>Opaque, SHA-256 hashed in <code>auth_session</code>, 30 days, rotated on use, reuse revokes the whole family</td></tr>
+            <tr><td>Cookies</td><td><code>httpOnly; Secure; SameSite=Lax</code>, scoped per storefront host</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>Because <code>.com</code> and <code>.co.uk</code> are separate origins, sessions do not cross between them. That is correct for two markets with different prices and delivery rules, and it also removes a class of cross-domain cookie problems.</p>
+
+      <h3>Admin sign-in &mdash; and why role checks live in one place</h3>
+      <p>Email + password (Argon2id) + mandatory TOTP MFA, separate token audience from customers, 8-hour sessions with idle timeout, optional IP allowlist for <code>SUPER_ADMIN</code>.</p>
+      <p>Permissions are rows of the form <code>domain:resource:action</code> &mdash; <code>production:batch:update</code>, <code>order:refund:create</code>. A single <code>PermissionsGuard</code> reads a decorator; no handler contains a role comparison:</p>
+
+<pre class="code"><span class="c">// One guard. One decorator. Nine roles, editable in Admin without a deploy.</span>
+@<span class="k">Post</span>(<span class="s">'batches/:id/complete'</span>)
+@<span class="k">RequirePermission</span>(<span class="s">'production:batch:update'</span>)
+<span class="k">async</span> completeBatch(@Param(<span class="s">'id'</span>) id: string, @Body() dto: CompleteBatchDto) { … }</pre>
+
+      <p>Roles <code>SUPER_ADMIN</code>, <code>ADMIN</code>, <code>PRODUCT_MANAGER</code>, <code>PRODUCTION_MANAGER</code>, <code>ORDER_MANAGER</code>, <code>INVENTORY_MANAGER</code>, <code>DELIVERY_MANAGER</code>, <code>CUSTOMER_SUPPORT</code> and <code>CONTENT_MANAGER</code> ship as seeded permission bundles, not as hard-coded identities.</p>
+
+      <h3>Money and integrity controls</h3>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Risk</th><th>Control</th></tr></thead>
+          <tbody>
+            <tr><td>Tampered prices or fees</td><td>The server never reads a price, tax, discount or delivery fee from the client. The cart sends variant IDs and quantities; everything else is recomputed by the pricing service.</td></tr>
+            <tr><td>Double-submitted checkout</td><td><code>Idempotency-Key</code> header, unique on (customer, key); a replay returns the original order rather than creating a second.</td></tr>
+            <tr><td>Replayed or forged webhooks</td><td>HMAC signature verified before parsing; unique <code>(provider, external_id)</code> insert makes processing exactly-once; unrecognised events are stored, not executed.</td></tr>
+            <tr><td>Frontend claiming payment success</td><td>Orders become <code>PAID</code> only from a verified webhook. The browser redirect is a UI hint with no authority.</td></tr>
+            <tr><td>Lost notifications</td><td>Transactional outbox: the <code>notification</code> row is written inside the same transaction as the business event, then delivered by the worker with exponential backoff and a dead-letter queue.</td></tr>
+            <tr><td>Review fraud</td><td>A review requires a matching <code>order_item</code> on a <code>DELIVERED</code> order belonging to that customer, enforced in the service and by a unique constraint.</td></tr>
+            <tr><td>Injection / XSS</td><td>Prisma parameterises everything; Zod validates every input at the boundary; admin rich text is sanitised server-side on write.</td></tr>
+            <tr><td>Secret exposure</td><td>All secrets from environment variables, none in the repo, <code>.env.example</code> documents every key, secret scanning plus Dependabot in CI.</td></tr>
+            <tr><td>Transport &amp; headers</td><td>TLS everywhere via Caddy, HSTS, CSP, <code>X-Content-Type-Options</code>, strict CORS allowlist of the three known origins.</td></tr>
+            <tr><td>Untraceable admin action</td><td>An interceptor writes <code>audit_log</code> with actor, entity, before/after and IP for every mutating admin request.</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3>Order numbers without collisions</h3>
+      <p><code>MB-IND-20260914-000123</code> &mdash; generated by one atomic upsert, safe under any concurrency, with no gaps from rolled-back transactions visible to customers:</p>
+<pre class="code"><span class="k">INSERT INTO</span> order_counter (market_code, business_date, last_seq)
+<span class="k">VALUES</span> ($market, $date, 1)
+<span class="k">ON CONFLICT</span> (market_code, business_date)
+<span class="k">DO UPDATE SET</span> last_seq = order_counter.last_seq + 1
+<span class="k">RETURNING</span> last_seq;</pre>
+    </section>
+
+    <!-- ============ 09 ============ -->
+    <section id="s9">
+      <div class="sec-head"><span class="sec-num">09</span><h2>API route structure</h2></div>
+      <p class="lede">Base <code>https://api.mylaporebites.com/v1</code>. Market resolved from an authenticated host mapping, never trusted from a client header alone. OpenAPI generated from the Nest decorators; <code>packages/sdk</code> is generated from that.</p>
+
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Group</th><th>Routes</th><th>Auth</th></tr></thead>
+          <tbody>
+            <tr><td>Storefront config</td><td><code>GET /markets/current</code> &middot; <code>GET /content/home</code> &middot; <code>GET /settings/public</code></td><td>public</td></tr>
+            <tr><td>Catalogue</td><td><code>GET /catalog/categories</code> &middot; <code>GET /catalog/products</code> &middot; <code>GET /catalog/products/:slug</code> &middot; <code>GET /catalog/search</code></td><td>public</td></tr>
+            <tr><td><b>Availability</b></td><td><code>GET /catalog/variants/:id/availability</code> &middot; <code>POST /availability/cart</code></td><td>public</td></tr>
+            <tr><td>Auth</td><td><code>POST /auth/otp/request</code> &middot; <code>POST /auth/otp/verify</code> &middot; <code>POST /auth/refresh</code> &middot; <code>POST /auth/logout</code></td><td>public + rate limited</td></tr>
+            <tr><td>Account</td><td><code>GET|PATCH /me</code> &middot; <code>GET|POST|PATCH|DELETE /me/addresses</code> &middot; <code>GET /me/orders</code> &middot; <code>GET /me/orders/:number</code> &middot; <code>POST /me/orders/:number/reorder</code> &middot; <code>GET|POST /me/reviews</code></td><td>customer</td></tr>
+            <tr><td>Cart</td><td><code>GET|POST /cart</code> &middot; <code>POST /cart/items</code> &middot; <code>PATCH|DELETE /cart/items/:id</code> &middot; <code>POST /cart/delivery-options</code> &middot; <code>POST /cart/hold</code></td><td>guest or customer</td></tr>
+            <tr><td>Checkout</td><td><code>POST /checkout/quote</code> &middot; <code>POST /checkout/orders</code> &middot; <code>POST /checkout/orders/:id/payment</code></td><td>customer + Idempotency-Key</td></tr>
+            <tr><td>Webhooks</td><td><code>POST /webhooks/razorpay</code> &middot; <code>POST /webhooks/stripe</code> &middot; <code>POST /webhooks/whatsapp</code></td><td>HMAC signature</td></tr>
+            <tr><td>Admin &mdash; catalogue</td><td><code>/admin/products</code> &middot; <code>/admin/variants</code> &middot; <code>/admin/categories</code> &middot; <code>/admin/media</code> &middot; <code>/admin/imports</code></td><td>admin + permission</td></tr>
+            <tr><td>Admin &mdash; commerce</td><td><code>/admin/orders</code> &middot; <code>/admin/orders/:id/status</code> &middot; <code>/admin/orders/:id/refund</code> &middot; <code>/admin/customers</code> &middot; <code>/admin/discounts</code></td><td>admin + permission</td></tr>
+            <tr><td><b>Admin &mdash; production</b></td><td><code>GET /admin/production/plans</code> &middot; <code>GET /admin/production/plans/:date</code> &middot; <code>GET /admin/production/plans/:date/sheet.pdf</code> &middot; <code>POST /admin/production/batches</code> &middot; <code>PATCH /admin/production/batches/:id</code> &middot; <code>GET|PUT /admin/capacity</code></td><td>admin + permission</td></tr>
+            <tr><td>Admin &mdash; fulfilment</td><td><code>/admin/packing</code> &middot; <code>/admin/shipments</code> &middot; <code>/admin/delivery/zones</code> &middot; <code>/admin/delivery/slots</code></td><td>admin + permission</td></tr>
+            <tr><td>Admin &mdash; ops</td><td><code>/admin/inventory</code> &middot; <code>/admin/ingredients</code> &middot; <code>/admin/reviews</code> &middot; <code>/admin/notifications</code> &middot; <code>/admin/reports/*</code> &middot; <code>/admin/users</code> &middot; <code>/admin/roles</code> &middot; <code>/admin/settings</code> &middot; <code>/admin/audit-logs</code></td><td>admin + permission</td></tr>
+            <tr><td>Internal</td><td><code>GET /health</code> &middot; <code>GET /health/ready</code> &middot; <code>GET /metrics</code></td><td>network-restricted</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h4>Conventions</h4>
+      <ul>
+        <li>Cursor pagination on every list endpoint &mdash; offsets break under concurrent writes.</li>
+        <li>One error envelope: <code>{ code, message, details }</code>. <code>code</code> is machine-readable (<code>CAPACITY_EXHAUSTED</code>, <code>ADDRESS_NOT_SERVICEABLE</code>, <code>CUTOFF_PASSED</code>); <code>message</code> is customer-safe. Stack traces never leave the server.</li>
+        <li>Domain errors carry a recovery hint &mdash; <code>CAPACITY_EXHAUSTED</code> returns <code>nextAvailableDate</code>, so the storefront can offer the fix, not just the failure.</li>
+        <li><code>/v1</code> in the path from day one, so a future native app can be pinned to a version.</li>
+      </ul>
+    </section>
+
+    <!-- ============ 10 ============ -->
+    <section id="s10">
+      <div class="sec-head"><span class="sec-num">10</span><h2>Deployment, and what to do about FastHosts</h2></div>
+
+      <h3>The honest position on FastHosts</h3>
+      <p>FastHosts shared and free hosting is built for PHP and static sites. It will not run a persistent NestJS process, PostgreSQL, Redis or background workers &mdash; and no amount of redesign would make this application fit inside it without gutting the production engine. So the split is clean:</p>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Stays on FastHosts</th><th>Moves to the VPS</th></tr></thead>
+          <tbody>
+            <tr><td>Domain registration for both domains</td><td>API, worker, both Next.js apps</td></tr>
+            <tr><td>DNS zone (or delegated to Cloudflare)</td><td>PostgreSQL, Redis</td></tr>
+            <tr><td>Business email MX, if already set up there</td><td>Caddy TLS termination</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>Nothing in the codebase knows FastHosts exists, so this costs nothing and locks in nothing. Before you renew anything, confirm with them that you can set arbitrary <code>A</code>, <code>AAAA</code>, <code>CNAME</code> and <code>TXT</code> records, and whether the free plan restricts changing nameservers &mdash; those two answers are the only things that matter.</p>
+
+      <div class="note flag">
+        <span class="tag">Your decision: where the VPS lives</span>
+        <p>Your customers are in Chennai; the cheapest hosting is in Europe. Static and cached pages are served from a Chennai edge either way &mdash; but every add-to-cart, availability check and checkout call goes to the origin.</p>
+        <p><b>India origin</b> (Linode Mumbai, DigitalOcean Bangalore, Lightsail Mumbai): roughly 20&ndash;40ms for Chennai customers, ~150ms for future UK customers, and costs more per GB of RAM.</p>
+        <p><b>Europe origin</b> (Hetzner): the cheapest option by a clear margin and ideal once the UK launches, but roughly 140&ndash;180ms per API call from Chennai &mdash; noticeable on every tap.</p>
+        <p><b>My recommendation:</b> India origin for launch. Chennai is the market you are actually trying to win, checkout responsiveness is conversion, and the whole stack is containers &mdash; relocating or splitting later is a data migration, not a rewrite. Revisit when UK volume justifies a second region.</p>
+      </div>
+
+      <h3>Production topology</h3>
+      <div class="plate">
+<pre class="mermaid">
+flowchart TB
+  subgraph CF["Cloudflare — DNS · CDN · WAF"]
+    E["Edge cache&lt;br/&gt;images, static, ISR"]
+  end
+  subgraph HOST["VPS — 4 vCPU / 8 GB / 160 GB NVMe"]
+    CAD["caddy :80 :443&lt;br/&gt;automatic TLS"]
+    SFC["storefront&lt;br/&gt;next start"]
+    ADC["admin&lt;br/&gt;next start"]
+    APIC["api&lt;br/&gt;node dist/main.js"]
+    WKC["worker&lt;br/&gt;node dist/worker.js"]
+    PGC[("postgres:17&lt;br/&gt;named volume")]
+    RDC[("redis:7&lt;br/&gt;AOF persistence")]
+    BKC["backup&lt;br/&gt;nightly pg_dump"]
+  end
+  R2[("Cloudflare R2&lt;br/&gt;media")]
+  OFF[("Off-site bucket&lt;br/&gt;encrypted dumps")]
+
+  E --> CAD
+  CAD --> SFC
+  CAD --> ADC
+  CAD --> APIC
+  SFC --> APIC
+  ADC --> APIC
+  APIC --> PGC
+  APIC --> RDC
+  WKC --> PGC
+  WKC --> RDC
+  BKC --> PGC
+  BKC --> OFF
+  SFC --> R2
+  APIC --> R2
+</pre>
+        <p class="plate-cap">Fig. 10 — Eight containers, one compose file. Only Postgres and Redis hold state.</p>
+      </div>
+      <p>The api and worker containers run the <b>same image</b> with different commands &mdash; so they can never drift out of sync, and a deploy is one build.</p>
+
+      <h3>Environments</h3>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Env</th><th>Where</th><th>Data</th></tr></thead>
+          <tbody>
+            <tr><td>Development</td><td>Local <code>docker compose up</code></td><td>Seeded catalogue, Razorpay/Stripe test keys, notifications to console</td></tr>
+            <tr><td>Staging</td><td><code>staging.mylaporebites.com</code> &mdash; separate small VPS</td><td>Anonymised copy of production; real test keys; WhatsApp test number</td></tr>
+            <tr><td>Production</td><td>Both live domains</td><td>Live</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="note risk">
+        <span class="tag">Worth the extra £5/month</span>
+        <p>Run staging on its own small VPS rather than beside production. Sharing one box means a staging migration or a runaway import can take the shop down &mdash; and it is precisely during a risky change that you most want production untouched.</p>
+      </div>
+
+      <h3>Pipeline</h3>
+      <div class="flow-strip">
+        <span class="st">push to main</span><span class="ar">→</span>
+        <span class="st">lint · typecheck · test</span><span class="ar">→</span>
+        <span class="st">build images → GHCR</span><span class="ar">→</span>
+        <span class="st">deploy staging</span><span class="ar">→</span>
+        <span class="st">e2e smoke</span><span class="ar">→</span>
+        <span class="st on">manual approve → production</span>
+      </div>
+      <p>Migrations run as a one-shot <code>prisma migrate deploy</code> container before the new API starts, and are written to be backward-compatible for one release so a rollback never strands the database ahead of the code.</p>
+
+      <h3>Backups and recovery</h3>
+      <ul>
+        <li>Nightly <code>pg_dump -Fc</code>, age-encrypted, pushed off-site. 30 daily plus 12 monthly retained.</li>
+        <li>Redis is treated as disposable &mdash; queue state is reconstructable from the database, which is why the notification outbox lives in Postgres and not only in the queue.</li>
+        <li>Media in R2 with versioning enabled.</li>
+        <li>Documented restore runbook with a target of under one hour, and a restore <b>actually rehearsed monthly</b>. An untested backup is a guess.</li>
+      </ul>
+
+      <h3>Observability</h3>
+      <p>Structured JSON logs with a request ID threaded through API, worker and queue jobs; Sentry for errors in all three apps; <code>/health</code> and <code>/health/ready</code> for container orchestration; uptime monitoring on both storefronts and the API. Two business alerts that matter more than any infrastructure metric: <b>a production plan not generated by 22:00</b>, and <b>a notification stuck in <code>PENDING</code> for over 15 minutes</b>.</p>
+    </section>
+
+    <!-- ============ 11 ============ -->
+    <section id="s11">
+      <div class="sec-head"><span class="sec-num">11</span><h2>Roadmap &amp; what I need from you</h2></div>
+
+      <div class="phases">
+        <div class="phase done"><span class="p-n">PHASE 0</span><div><b>Architecture</b> &mdash; this document, plus <code>docker-compose.prod.yml</code> and <code>.env.example</code>. <i>Complete, awaiting your review.</i></div></div>
+        <div class="phase"><span class="p-n">PHASE 1</span><div>Monorepo scaffold, Prisma schema and migrations, markets, catalogue, categories, customers, auth foundation, seed data</div></div>
+        <div class="phase"><span class="p-n">PHASE 2</span><div>Mobile storefront &mdash; home, categories, search, product pages, cart</div></div>
+        <div class="phase"><span class="p-n">PHASE 3</span><div>Addresses, delivery zones and slots, availability engine, capacity engine <i>(the concurrency tests land here)</i></div></div>
+        <div class="phase"><span class="p-n">PHASE 4</span><div>Checkout, Razorpay, orders, order tracking</div></div>
+        <div class="phase"><span class="p-n">PHASE 5</span><div>Production plans and batches, production sheet, packing, delivery workflow</div></div>
+        <div class="phase"><span class="p-n">PHASE 6</span><div>WhatsApp, SMS fallback, email, notification outbox</div></div>
+        <div class="phase"><span class="p-n">PHASE 7</span><div>Full admin dashboard across every module</div></div>
+        <div class="phase"><span class="p-n">PHASE 8</span><div>CSV import/export, SEO, PWA, performance, accessibility</div></div>
+        <div class="phase"><span class="p-n">PHASE 9</span><div>Security review, test hardening, backups, deployment, documentation</div></div>
+      </div>
+
+      <h3>Start these now &mdash; they have external lead times</h3>
+      <p>Each of these is someone else&rsquo;s queue, not code. Started late, they become the reason launch slips.</p>
+      <ol class="body-list">
+        <li><b>Meta Business verification</b> and a dedicated WhatsApp sender number, then authentication-template approval.</li>
+        <li><b>Razorpay merchant onboarding</b> &mdash; KYC for a food business takes real time.</li>
+        <li><b>FastHosts DNS check</b> &mdash; arbitrary record types, and whether nameservers can be changed.</li>
+        <li><b>Product data.</b> The reference catalogue has around 440 products across 17 categories &mdash; Podis, Vadam, Vathal, Appalams, Pickles, Thokkus, Instant Mixes, Savouries, Sweets, Nuts &amp; Spices, Bakery, Snacks, Native Specials, Desi Ghee, Desi Butter, Chekku Oils and general lines. That volume is exactly why CSV import is a Phase 8 deliverable rather than a nice-to-have, and it is the long pole in launch. I can produce the import template in Phase 1 so catalogue entry runs in parallel with development.</li>
+        <li><b>Photography.</b> A food storefront lives on its images, and no architecture compensates for weak ones.</li>
+      </ol>
+
+      <h3>Four things I need before Phase 1</h3>
+      <ol class="body-list">
+        <li><b>The five deviations in section 00</b> &mdash; approve, or tell me which to change.</li>
+        <li><b>VPS region</b> &mdash; India or Europe. My recommendation is India for launch.</li>
+        <li><b>Real production numbers</b> for three or four products: how many packs the kitchen can genuinely make in a day, what time you need orders in by, and which days you cook. Even rough figures make the seed data honest instead of invented.</li>
+        <li><b>Delivery zones</b> &mdash; which Chennai PIN codes you will deliver to at launch, and the fee and minimum order for each.</li>
+      </ol>
+
+      <div class="note key">
+        <span class="tag">On approval</span>
+        <p>Phase 1 begins with the Prisma schema and migrations for every table in section 04, the market and catalogue modules, the auth foundation, and a seeded development database &mdash; all running under <code>docker compose up</code> on your machine so you can click through it from the first week.</p>
+      </div>
+    </section>
+  </main>
+
+  <footer class="end">
+    Mylapore Bites &middot; Phase 0 technical design &middot; 14 September 2026 &middot; Made Fresh. From Mylapore. To Your Door.
+  </footer>
+</div>
