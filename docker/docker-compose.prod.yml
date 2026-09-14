@@ -1,0 +1,266 @@
+# ==========================================================================
+# Mylapore Bites — production topology (single VPS)
+#
+#   docker compose -f docker/docker-compose.prod.yml --env-file .env up -d
+#
+# Only `postgres` and `redis` hold state. Everything else is replaceable.
+# `api` and `worker` run the SAME image with different commands, so they
+# can never drift out of sync.
+#
+# Sizing: comfortable on 4 vCPU / 8 GB / 160 GB NVMe.
+# ==========================================================================
+
+name: mylaporebites
+
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
+x-api-env: &api-env
+  NODE_ENV: production
+  DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}?schema=public&connection_limit=${DB_POOL_SIZE:-15}
+  REDIS_URL: redis://default:${REDIS_PASSWORD}@redis:6379
+  JWT_PRIVATE_KEY: ${JWT_PRIVATE_KEY}
+  JWT_PUBLIC_KEY: ${JWT_PUBLIC_KEY}
+  ENCRYPTION_KEY: ${ENCRYPTION_KEY}
+  # --- markets -----------------------------------------------------------
+  STOREFRONT_IN_ORIGIN: ${STOREFRONT_IN_ORIGIN}
+  STOREFRONT_UK_ORIGIN: ${STOREFRONT_UK_ORIGIN}
+  ADMIN_ORIGIN: ${ADMIN_ORIGIN}
+  # --- payments ----------------------------------------------------------
+  RAZORPAY_KEY_ID: ${RAZORPAY_KEY_ID}
+  RAZORPAY_KEY_SECRET: ${RAZORPAY_KEY_SECRET}
+  RAZORPAY_WEBHOOK_SECRET: ${RAZORPAY_WEBHOOK_SECRET}
+  STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY}
+  STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET}
+  # --- messaging ---------------------------------------------------------
+  WHATSAPP_PHONE_NUMBER_ID: ${WHATSAPP_PHONE_NUMBER_ID}
+  WHATSAPP_ACCESS_TOKEN: ${WHATSAPP_ACCESS_TOKEN}
+  WHATSAPP_WEBHOOK_VERIFY_TOKEN: ${WHATSAPP_WEBHOOK_VERIFY_TOKEN}
+  WHATSAPP_APP_SECRET: ${WHATSAPP_APP_SECRET}
+  SMS_PROVIDER: ${SMS_PROVIDER:-msg91}
+  SMS_API_KEY: ${SMS_API_KEY}
+  SMS_SENDER_ID: ${SMS_SENDER_ID}
+  EMAIL_PROVIDER: ${EMAIL_PROVIDER:-resend}
+  EMAIL_API_KEY: ${EMAIL_API_KEY}
+  EMAIL_FROM: ${EMAIL_FROM}
+  # --- storage -----------------------------------------------------------
+  S3_ENDPOINT: ${S3_ENDPOINT}
+  S3_REGION: ${S3_REGION:-auto}
+  S3_BUCKET: ${S3_BUCKET}
+  S3_ACCESS_KEY_ID: ${S3_ACCESS_KEY_ID}
+  S3_SECRET_ACCESS_KEY: ${S3_SECRET_ACCESS_KEY}
+  S3_PUBLIC_BASE_URL: ${S3_PUBLIC_BASE_URL}
+  # --- observability -----------------------------------------------------
+  SENTRY_DSN: ${SENTRY_DSN}
+  LOG_LEVEL: ${LOG_LEVEL:-info}
+
+services:
+
+  # ------------------------------------------------------------------ edge
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    environment:
+      STOREFRONT_IN_DOMAIN: ${STOREFRONT_IN_DOMAIN}
+      STOREFRONT_UK_DOMAIN: ${STOREFRONT_UK_DOMAIN}
+      ADMIN_DOMAIN: ${ADMIN_DOMAIN}
+      API_DOMAIN: ${API_DOMAIN}
+      ACME_EMAIL: ${ACME_EMAIL}
+    depends_on: [storefront, admin, api]
+    logging: *default-logging
+
+  # ------------------------------------------------------------- migration
+  # One-shot. Must exit 0 before api/worker start, so the schema is never
+  # behind the code that assumes it.
+  migrate:
+    image: ${IMAGE_REGISTRY}/mylaporebites-api:${IMAGE_TAG:-latest}
+    restart: "no"
+    command: ["pnpm", "--filter", "@mb/database", "migrate:deploy"]
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}?schema=public
+    depends_on:
+      postgres:
+        condition: service_healthy
+    logging: *default-logging
+
+  # ------------------------------------------------------------------- api
+  api:
+    image: ${IMAGE_REGISTRY}/mylaporebites-api:${IMAGE_TAG:-latest}
+    restart: unless-stopped
+    command: ["node", "dist/main.js"]
+    environment:
+      <<: *api-env
+      PORT: "4000"
+      ROLE: api
+    expose: ["4000"]
+    depends_on:
+      postgres:   { condition: service_healthy }
+      redis:      { condition: service_healthy }
+      migrate:    { condition: service_completed_successfully }
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://localhost:4000/v1/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 40s
+    deploy:
+      resources:
+        limits: { memory: 1536M }
+    logging: *default-logging
+
+  # ---------------------------------------------------------------- worker
+  # Same image as `api`. Different entry point. This is deliberate —
+  # see architecture §00 D1.
+  worker:
+    image: ${IMAGE_REGISTRY}/mylaporebites-api:${IMAGE_TAG:-latest}
+    restart: unless-stopped
+    command: ["node", "dist/worker.js"]
+    environment:
+      <<: *api-env
+      ROLE: worker
+      WORKER_CONCURRENCY: ${WORKER_CONCURRENCY:-5}
+    depends_on:
+      postgres:   { condition: service_healthy }
+      redis:      { condition: service_healthy }
+      migrate:    { condition: service_completed_successfully }
+    deploy:
+      resources:
+        limits: { memory: 1024M }
+    logging: *default-logging
+
+  # ------------------------------------------------------------ storefront
+  # ONE container serves both mylaporebites.com and mylaporebites.co.uk.
+  # Market is resolved from the Host header in middleware.
+  storefront:
+    image: ${IMAGE_REGISTRY}/mylaporebites-storefront:${IMAGE_TAG:-latest}
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      PORT: "3000"
+      API_INTERNAL_URL: http://api:4000/v1
+      NEXT_PUBLIC_API_URL: https://${API_DOMAIN}/v1
+      NEXT_PUBLIC_MEDIA_BASE_URL: ${S3_PUBLIC_BASE_URL}
+      NEXT_PUBLIC_SENTRY_DSN: ${SENTRY_DSN_WEB}
+      REVALIDATE_SECRET: ${REVALIDATE_SECRET}
+    expose: ["3000"]
+    depends_on: [api]
+    deploy:
+      resources:
+        limits: { memory: 1024M }
+    logging: *default-logging
+
+  # ----------------------------------------------------------------- admin
+  admin:
+    image: ${IMAGE_REGISTRY}/mylaporebites-admin:${IMAGE_TAG:-latest}
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      PORT: "3001"
+      API_INTERNAL_URL: http://api:4000/v1
+      NEXT_PUBLIC_API_URL: https://${API_DOMAIN}/v1
+      NEXT_PUBLIC_MEDIA_BASE_URL: ${S3_PUBLIC_BASE_URL}
+    expose: ["3001"]
+    depends_on: [api]
+    deploy:
+      resources:
+        limits: { memory: 768M }
+    logging: *default-logging
+
+  # -------------------------------------------------------------- postgres
+  postgres:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_INITDB_ARGS: "--data-checksums"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    command:
+      - postgres
+      - -c
+      - max_connections=100
+      - -c
+      - shared_buffers=1GB
+      - -c
+      - effective_cache_size=3GB
+      - -c
+      - work_mem=16MB
+      - -c
+      - maintenance_work_mem=256MB
+      - -c
+      - random_page_cost=1.1
+      - -c
+      - log_min_duration_statement=500
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    # Not published to the host. Reach it with:
+    #   docker compose exec postgres psql -U $POSTGRES_USER $POSTGRES_DB
+    logging: *default-logging
+
+  # ----------------------------------------------------------------- redis
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: >
+      redis-server
+      --requirepass ${REDIS_PASSWORD}
+      --appendonly yes
+      --appendfsync everysec
+      --maxmemory 512mb
+      --maxmemory-policy noeviction
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    logging: *default-logging
+
+  # ---------------------------------------------------------------- backup
+  # Nightly encrypted dump pushed off-site. `noeviction` above matters here:
+  # queue jobs must never be silently dropped under memory pressure.
+  backup:
+    image: ${IMAGE_REGISTRY}/mylaporebites-backup:${IMAGE_TAG:-latest}
+    restart: unless-stopped
+    environment:
+      PGHOST: postgres
+      PGUSER: ${POSTGRES_USER}
+      PGPASSWORD: ${POSTGRES_PASSWORD}
+      PGDATABASE: ${POSTGRES_DB}
+      BACKUP_CRON: ${BACKUP_CRON:-0 18 * * *}
+      BACKUP_RETENTION_DAILY: ${BACKUP_RETENTION_DAILY:-30}
+      BACKUP_RETENTION_MONTHLY: ${BACKUP_RETENTION_MONTHLY:-12}
+      BACKUP_ENCRYPTION_KEY: ${BACKUP_ENCRYPTION_KEY}
+      BACKUP_S3_ENDPOINT: ${BACKUP_S3_ENDPOINT}
+      BACKUP_S3_BUCKET: ${BACKUP_S3_BUCKET}
+      BACKUP_S3_ACCESS_KEY_ID: ${BACKUP_S3_ACCESS_KEY_ID}
+      BACKUP_S3_SECRET_ACCESS_KEY: ${BACKUP_S3_SECRET_ACCESS_KEY}
+      HEALTHCHECK_PING_URL: ${BACKUP_HEALTHCHECK_URL}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    logging: *default-logging
+
+volumes:
+  pgdata:
+  redisdata:
+  caddy_data:
+  caddy_config:

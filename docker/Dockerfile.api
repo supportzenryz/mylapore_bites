@@ -1,0 +1,46 @@
+# One image, two containers: `node dist/main.js` (api) and
+# `node dist/worker.js` (worker). They cannot drift out of sync.
+#
+# Prisma 7 runs through the pg driver adapter, so no native query engine is
+# downloaded or shipped here.
+
+FROM node:22-alpine AS base
+RUN corepack enable && apk add --no-cache libc6-compat
+WORKDIR /app
+
+# ---------------------------------------------------------------- dependencies
+FROM base AS deps
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml .npmrc ./
+COPY apps/api/package.json                 apps/api/
+COPY packages/database/package.json        packages/database/
+COPY packages/contracts/package.json       packages/contracts/
+RUN pnpm install --frozen-lockfile
+
+# ---------------------------------------------------------------------- build
+FROM base AS build
+COPY --from=deps /app/node_modules ./node_modules
+COPY --from=deps /app/apps/api/node_modules ./apps/api/node_modules
+COPY --from=deps /app/packages ./packages
+COPY . .
+RUN pnpm --filter @mb/database generate \
+ && pnpm --filter @mb/contracts build \
+ && pnpm --filter @mb/database build \
+ && pnpm --filter @mb/api build \
+ && pnpm prune --prod
+
+# --------------------------------------------------------------------- runner
+FROM base AS runner
+ENV NODE_ENV=production
+RUN addgroup -g 1001 -S nodejs && adduser -S -u 1001 -G nodejs mb
+
+COPY --from=build --chown=mb:nodejs /app/node_modules          ./node_modules
+COPY --from=build --chown=mb:nodejs /app/packages              ./packages
+COPY --from=build --chown=mb:nodejs /app/apps/api/dist         ./dist
+COPY --from=build --chown=mb:nodejs /app/apps/api/node_modules ./node_modules
+
+USER mb
+EXPOSE 4000
+HEALTHCHECK --interval=30s --timeout=5s --start-period=40s --retries=3 \
+  CMD node -e "fetch('http://localhost:4000/v1/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+
+CMD ["node", "dist/main.js"]

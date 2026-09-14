@@ -1,0 +1,53 @@
+# Local development. Brings up ONLY the stateful services; run the apps with
+# `pnpm dev` on the host so hot reload works.
+#
+#   docker compose -f docker/docker-compose.yml up -d
+#   pnpm db:migrate && pnpm db:seed
+#   pnpm api:dev      (terminal 2)
+#   pnpm --filter @mb/storefront dev   (terminal 3)
+
+name: mylaporebites-dev
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: mylaporebites
+      POSTGRES_PASSWORD: localdev
+      POSTGRES_DB: mylaporebites
+    ports: ["5432:5432"]
+    volumes: [pgdata_dev:/var/lib/postgresql/data]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U mylaporebites -d mylaporebites"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: redis-server --appendonly yes
+    ports: ["6379:6379"]
+    volumes: [redisdata_dev:/data]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # S3-compatible storage for local development. Production uses Cloudflare R2.
+  minio:
+    image: minio/minio:latest
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: mylaporebites
+      MINIO_ROOT_PASSWORD: localdev123
+    ports: ["9000:9000", "9001:9001"]
+    volumes: [miniodata_dev:/data]
+
+volumes:
+  pgdata_dev:
+  redisdata_dev:
+  miniodata_dev:

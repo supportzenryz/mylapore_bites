@@ -1,0 +1,42 @@
+{
+  "name": "mylapore-bites",
+  "private": true,
+  "version": "0.1.0",
+  "packageManager": "pnpm@10.28.0",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "build": "turbo run build",
+    "dev": "turbo run dev",
+    "lint": "turbo run lint",
+    "typecheck": "turbo run typecheck",
+    "test": "turbo run test",
+    "db:generate": "pnpm --filter @mb/database generate",
+    "db:migrate": "pnpm --filter @mb/database migrate:dev",
+    "db:deploy": "pnpm --filter @mb/database migrate:deploy",
+    "db:seed": "pnpm --filter @mb/database seed",
+    "db:reset": "pnpm --filter @mb/database reset",
+    "db:studio": "pnpm --filter @mb/database studio",
+    "api:dev": "pnpm --filter @mb/api dev",
+    "worker:dev": "pnpm --filter @mb/api worker:dev",
+    "infra:up": "docker compose -f docker/docker-compose.yml up -d",
+    "infra:down": "docker compose -f docker/docker-compose.yml down",
+    "test:unit": "pnpm --filter @mb/api test",
+    "test:concurrency": "node tests/concurrency/capacity.proof.mjs",
+    "test:all": "pnpm test:unit && pnpm test:concurrency",
+    "verify": "pnpm typecheck && pnpm test:unit",
+    "mock:api": "tsx tools/mock-api/server.ts",
+    "test:e2e:cart": "node tests/e2e/cart-flow.mjs",
+    "test:visual": "node tests/e2e/visual-check.mjs"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "pg": "^8.13.1",
+    "playwright": "^1.63.0",
+    "prettier": "^3.4.2",
+    "tsx": "^4.23.13",
+    "turbo": "^2.3.3",
+    "typescript": "^5.7.2"
+  }
+}

@@ -1,0 +1,36 @@
+# Multi-target: build the storefront or the admin from the same file.
+#   docker build -f docker/Dockerfile.web --build-arg APP=storefront .
+#   docker build -f docker/Dockerfile.web --build-arg APP=admin .
+
+FROM node:22-alpine AS base
+RUN corepack enable && apk add --no-cache libc6-compat
+WORKDIR /app
+ARG APP=storefront
+
+FROM base AS deps
+ARG APP
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml .npmrc ./
+COPY apps/${APP}/package.json          apps/${APP}/
+COPY packages/contracts/package.json   packages/contracts/
+RUN pnpm install --frozen-lockfile
+
+FROM base AS build
+ARG APP
+ENV NEXT_TELEMETRY_DISABLED=1
+COPY --from=deps /app/node_modules ./node_modules
+COPY --from=deps /app/apps/${APP}/node_modules ./apps/${APP}/node_modules
+COPY . .
+RUN pnpm --filter @mb/contracts build && pnpm --filter @mb/${APP} build
+
+FROM base AS runner
+ARG APP
+ENV NODE_ENV=production NEXT_TELEMETRY_DISABLED=1
+RUN addgroup -g 1001 -S nodejs && adduser -S -u 1001 -G nodejs mb
+
+COPY --from=build --chown=mb:nodejs /app/apps/${APP}/public        ./public
+COPY --from=build --chown=mb:nodejs /app/apps/${APP}/.next/standalone ./
+COPY --from=build --chown=mb:nodejs /app/apps/${APP}/.next/static  ./.next/static
+
+USER mb
+EXPOSE 3000
+CMD ["node", "server.js"]

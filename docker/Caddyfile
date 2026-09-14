@@ -1,0 +1,55 @@
+# Mylapore Bites — reverse proxy & automatic TLS.
+# One storefront upstream serves BOTH domains; the app resolves the market
+# from the Host header. Do not split this into two upstreams.
+
+{
+	email {$ACME_EMAIL}
+	servers {
+		trusted_proxies static private_ranges
+	}
+}
+
+(security_headers) {
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		Permissions-Policy "geolocation=(self), camera=(), microphone=()"
+		-Server
+	}
+}
+
+# ---- India / global storefront -------------------------------------------
+{$STOREFRONT_IN_DOMAIN}, www.{$STOREFRONT_IN_DOMAIN} {
+	import security_headers
+	encode zstd gzip
+	reverse_proxy storefront:3000
+}
+
+# ---- UK storefront — same upstream ---------------------------------------
+{$STOREFRONT_UK_DOMAIN}, www.{$STOREFRONT_UK_DOMAIN} {
+	import security_headers
+	encode zstd gzip
+	reverse_proxy storefront:3000
+}
+
+# ---- Admin ---------------------------------------------------------------
+{$ADMIN_DOMAIN} {
+	import security_headers
+	encode zstd gzip
+	reverse_proxy admin:3001
+}
+
+# ---- API -----------------------------------------------------------------
+{$API_DOMAIN} {
+	import security_headers
+	encode zstd gzip
+
+	# Health and metrics are not public.
+	@internal path /v1/metrics /v1/health/ready
+	respond @internal 404
+
+	# Webhooks need the raw body for signature verification — no transforms.
+	reverse_proxy api:4000
+}
