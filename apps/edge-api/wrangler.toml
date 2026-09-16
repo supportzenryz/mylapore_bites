@@ -1,0 +1,18 @@
+name = "mb-edge-api"
+main = "src/index.ts"
+compatibility_date = "2026-09-01"
+compatibility_flags = ["nodejs_compat"]
+
+# Local dev only. `wrangler dev` reads this; it is not a secret and matches
+# the same default DATABASE_URL as docker/docker-compose.yml.
+[vars]
+DATABASE_URL = "postgresql://mylaporebites:localdev@127.0.0.1:5432/mylaporebites"
+
+# Bind once the Neon account exists (see docs/architecture-cloudflare.html
+# §09 and claude/deployment-migration-cloudflare.md) — create it with
+# `wrangler hyperdrive create mb-db --connection-string="<neon-url>"` and
+# paste the id it prints below. Nothing in src/ changes when this is added;
+# createPool() already prefers HYPERDRIVE over DATABASE_URL.
+# [[hyperdrive]]
+# binding = "HYPERDRIVE"
+# id = "<from `wrangler hyperdrive create`>"

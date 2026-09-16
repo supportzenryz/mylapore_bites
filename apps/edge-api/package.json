@@ -1,0 +1,28 @@
+{
+  "name": "@mb/edge-api",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "build:test": "tsc src/repository/capacity.repository.ts --target ES2022 --module ESNext --moduleResolution Bundler --outDir .build --rootDir src --declaration false --skipLibCheck",
+    "deploy": "wrangler deploy"
+  },
+  "dependencies": {
+    "@mb/contracts": "workspace:*",
+    "hono": "^4.6.14",
+    "jose": "^5.9.6",
+    "hash-wasm": "^4.11.0",
+    "luxon": "^3.5.0",
+    "pg": "^8.13.1",
+    "zod": "^3.24.1"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20241224.0",
+    "@types/luxon": "^3.4.2",
+    "@types/pg": "^8.11.10",
+    "typescript": "^5.7.2",
+    "wrangler": "^3.99.0"
+  }
+}

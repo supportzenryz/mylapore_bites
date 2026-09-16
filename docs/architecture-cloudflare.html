@@ -1,0 +1,321 @@
+<title>Cloudflare-Native Migration</title>
+<style>
+  :root{
+    --paper:#FBFAF7; --surface:#FFFFFF; --surface-2:#F3F1EA;
+    --ink:#1A1A1A; --ink-2:#5C5852; --ink-3:#847F74;
+    --line:#E4E1DA; --line-2:#D8D4C9;
+    --brand:#153017; --brand-ink:#0F2411; --brand-tint:#EDF3EE; --brand-edge:#CFDED2;
+    --terracotta:#AF451F; --terracotta-tint:#FBEEE8; --terracotta-edge:#E9C8B8;
+    --brass:#B5751F; --brass-ink:#8A5A14; --brass-tint:#FBF3E4; --brass-edge:#E9D3A8;
+    --code-bg:#12201A; --code-ink:#D9E6DC; --code-line:#24382E;
+    --shadow: 0 1px 2px rgba(21,48,23,.06), 0 8px 24px -12px rgba(21,48,23,.14);
+    --radius: 10px;
+    --display: "Fraunces", Georgia, "Times New Roman", serif;
+    --body: "Source Sans 3", system-ui, -apple-system, "Segoe UI", sans-serif;
+    --mono: "IBM Plex Mono", ui-monospace, "SF Mono", Consolas, monospace;
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --paper:#10140F; --surface:#161C15; --surface-2:#1B231A;
+      --ink:#EDEDE6; --ink-2:#B9B6AC; --ink-3:#8D897E;
+      --line:#2A332A; --line-2:#37412F;
+      --brand:#7BB889; --brand-ink:#CFE8D2; --brand-tint:#182420; --brand-edge:#2C4534;
+      --terracotta:#E08862; --terracotta-tint:#241812; --terracotta-edge:#4A2C1C;
+      --brass:#D9A85A; --brass-ink:#F0D8A2; --brass-tint:#241C0F; --brass-edge:#4A381A;
+      --code-bg:#0B120D; --code-ink:#CFE0D2; --code-line:#20301F;
+      --shadow: 0 1px 2px rgba(0,0,0,.3), 0 8px 24px -12px rgba(0,0,0,.5);
+    }
+  }
+  :root[data-theme="dark"]{
+    --paper:#10140F; --surface:#161C15; --surface-2:#1B231A;
+    --ink:#EDEDE6; --ink-2:#B9B6AC; --ink-3:#8D897E;
+    --line:#2A332A; --line-2:#37412F;
+    --brand:#7BB889; --brand-ink:#CFE8D2; --brand-tint:#182420; --brand-edge:#2C4534;
+    --terracotta:#E08862; --terracotta-tint:#241812; --terracotta-edge:#4A2C1C;
+    --brass:#D9A85A; --brass-ink:#F0D8A2; --brass-tint:#241C0F; --brass-edge:#4A381A;
+    --code-bg:#0B120D; --code-ink:#CFE0D2; --code-line:#20301F;
+    --shadow: 0 1px 2px rgba(0,0,0,.3), 0 8px 24px -12px rgba(0,0,0,.5);
+  }
+
+  *{ box-sizing: border-box; }
+  body{
+    background: var(--paper); color: var(--ink);
+    font-family: var(--body); font-size: 16px; line-height: 1.6;
+    padding-inline: 20px; padding-block: 40px;
+  }
+  .wrap{ max-width: 780px; margin: 0 auto; }
+  h1,h2,h3{ font-family: var(--display); font-weight: 600; text-wrap: balance; color: var(--ink); }
+  h1{ font-size: clamp(1.7rem, 4.5vw, 2.35rem); line-height: 1.15; margin: 0 0 6px; letter-spacing: -0.01em; }
+  h2{ font-size: 1.35rem; margin: 0 0 4px; }
+  h3{ font-size: 1.05rem; margin: 0 0 4px; color: var(--brand-ink); }
+  p{ margin: 0 0 14px; max-width: 66ch; color: var(--ink); }
+  .lede{ color: var(--ink-2); font-size: 1.05rem; max-width: 60ch; }
+  strong{ color: var(--ink); }
+  code, .mono{ font-family: var(--mono); font-size: .89em; }
+  code{ background: var(--surface-2); border: 1px solid var(--line); border-radius: 4px; padding: .05em .38em; }
+
+  /* ---- header / status bar ---- */
+  .kicker{
+    display:inline-flex; align-items:center; gap:8px;
+    font-family: var(--mono); font-size: .72rem; letter-spacing: .08em; text-transform: uppercase;
+    color: var(--brand-ink); background: var(--brand-tint); border: 1px solid var(--brand-edge);
+    padding: 5px 10px; border-radius: 999px; margin-bottom: 16px;
+  }
+  .kicker::before{ content:""; width:6px; height:6px; border-radius:50%; background: var(--brand); }
+  header{ padding-block: 4px 28px; border-bottom: 1px solid var(--line); margin-bottom: 32px; }
+  .meta-row{ display:flex; flex-wrap:wrap; gap: 10px 22px; margin-top: 18px; }
+  .meta{ font-size: .85rem; color: var(--ink-2); }
+  .meta b{ display:block; font-size: .68rem; text-transform: uppercase; letter-spacing: .07em; color: var(--ink-3); font-weight: 600; margin-bottom: 2px; }
+
+  section{ margin-block: 38px; }
+  section > .num{
+    font-family: var(--mono); font-size: .74rem; color: var(--brass-ink);
+    background: var(--brass-tint); border:1px solid var(--brass-edge);
+    display:inline-block; padding: 2px 8px; border-radius: 5px; margin-bottom: 10px; letter-spacing: .04em;
+  }
+
+  /* ---- comparison table ---- */
+  .tbl-wrap{ overflow-x:auto; border:1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow); background: var(--surface); }
+  table{ border-collapse: collapse; width: 100%; min-width: 560px; font-size: .92rem; }
+  th, td{ text-align:left; padding: 11px 14px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  thead th{ font-family: var(--mono); font-size: .7rem; text-transform: uppercase; letter-spacing: .06em; color: var(--ink-3); background: var(--surface-2); }
+  tbody tr:last-child td{ border-bottom:none; }
+  td.layer{ font-weight: 600; white-space: nowrap; }
+  td.was{ color: var(--ink-2); }
+  td.now{ color: var(--brand-ink); font-weight: 600; }
+  .unchanged-row td.now{ color: var(--ink-2); font-weight: 400; }
+  .tag{ display:inline-block; font-family: var(--mono); font-size: .66rem; letter-spacing:.05em; text-transform:uppercase; padding: 1px 6px; border-radius: 4px; margin-left:6px; vertical-align: 1px; }
+  .tag.new{ background: var(--terracotta-tint); color: var(--terracotta); border:1px solid var(--terracotta-edge); }
+  .tag.same{ background: var(--surface-2); color: var(--ink-3); border:1px solid var(--line-2); }
+
+  /* ---- callouts ---- */
+  .card{ background: var(--surface); border:1px solid var(--line); border-radius: var(--radius); padding: 18px 20px; box-shadow: var(--shadow); }
+  .stack > * + *{ margin-top: 14px; }
+  .grid2{ display:grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  @media (max-width: 640px){ .grid2{ grid-template-columns: 1fr; } }
+  .callout{ border-radius: var(--radius); padding: 14px 16px; border:1px solid; }
+  .callout h3{ margin-bottom: 6px; font-size: .95rem; }
+  .callout p{ margin:0; font-size: .93rem; }
+  .callout.keep{ background: var(--brand-tint); border-color: var(--brand-edge); }
+  .callout.keep h3{ color: var(--brand-ink); }
+  .callout.action{ background: var(--terracotta-tint); border-color: var(--terracotta-edge); }
+  .callout.action h3{ color: var(--terracotta); }
+  .callout.risk{ background: var(--brass-tint); border-color: var(--brass-edge); }
+  .callout.risk h3{ color: var(--brass-ink); }
+  ul.plain{ list-style: none; margin:0; padding:0; }
+  ul.plain li{ padding: 6px 0; border-bottom: 1px dashed var(--line); font-size: .93rem; }
+  ul.plain li:last-child{ border-bottom:none; }
+  ul.tick li::before{ content:"✓ "; color: var(--brand-ink); font-weight:700; }
+
+  /* ---- job mapping list ---- */
+  .job-map{ display:flex; flex-direction:column; gap:10px; }
+  .job-row{ display:flex; align-items:center; gap:10px; font-size:.9rem; background:var(--surface); border:1px solid var(--line); border-radius:8px; padding:10px 14px; box-shadow: var(--shadow); }
+  .job-row .from{ flex: 1 1 42%; color: var(--ink-2); }
+  .job-row .arrow{ color: var(--ink-3); font-family: var(--mono); }
+  .job-row .to{ flex: 1 1 42%; font-weight:600; color: var(--brand-ink); }
+  @media (max-width: 560px){ .job-row{ flex-wrap:wrap; } .job-row .arrow{ display:none; } }
+
+  /* ---- phase timeline ---- */
+  .phases{ display:flex; flex-direction:column; }
+  .phase{ display:grid; grid-template-columns: 84px 1fr; gap: 16px; padding-block: 14px; border-top: 1px solid var(--line); }
+  .phase:first-child{ border-top:none; }
+  .phase .ph-k{ font-family: var(--mono); font-size: .72rem; letter-spacing:.05em; color: var(--ink-3); text-transform: uppercase; padding-top: 2px; }
+  .phase h3{ margin-bottom: 4px; }
+  .phase p{ margin: 0; font-size: .92rem; color: var(--ink-2); }
+
+  /* ---- diagram / code ---- */
+  figure{ margin: 0; }
+  figcaption{ font-size: .85rem; color: var(--ink-3); margin-top: 8px; }
+  pre.mermaid{ background: var(--surface); border:1px solid var(--line); border-radius: var(--radius); padding: 18px; box-shadow: var(--shadow); overflow-x:auto; }
+  pre.code{ background: var(--code-bg); color: var(--code-ink); border-radius: var(--radius); padding: 16px 18px; overflow-x:auto; font-family: var(--mono); font-size: .82rem; line-height: 1.55; border: 1px solid var(--code-line); }
+  pre.code .c{ color: #8FA893; }
+
+  footer{ margin-top: 48px; padding-top: 22px; border-top: 1px solid var(--line); }
+  footer p{ color: var(--ink-2); font-size: .9rem; }
+</style>
+
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&family=Source+Sans+3:wght@400;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+
+<div class="wrap">
+
+  <header>
+    <span class="kicker">Architecture · awaiting your review</span>
+    <h1>Cloudflare-Native Migration</h1>
+    <p class="lede">Moving the API, background jobs, database access and storefront hosting from the VPS + Docker plan onto Cloudflare's platform — what changes, what doesn't, and what needs an account only you can create.</p>
+    <div class="meta-row">
+      <div class="meta"><b>Supersedes</b>Phase 0 §Deployment (Single VPS + Docker)</div>
+      <div class="meta"><b>Scope</b>Compute, jobs, database access, frontend hosting</div>
+      <div class="meta"><b>Unchanged</b>Schema, capacity engine, RBAC, contracts, brand</div>
+      <div class="meta"><b>Drafted</b>16 Sep 2026</div>
+    </div>
+  </header>
+
+  <section>
+    <span class="num">01 · why this is a real decision, not a deploy target swap</span>
+    <h2>What actually moves</h2>
+    <p>The VPS plan ran one Docker image twice — an HTTP process and a worker process — against a Postgres and Redis container it also owned. Cloudflare has no equivalent of "a server you SSH into": Workers are short-lived request handlers with no persistent process, so the parts of this system that assumed a long-running Node process — BullMQ polling Redis, a raw TCP connection pool to Postgres — need a different mechanism, not just a different host. The table below is the honest mapping.</p>
+
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr><th>Layer</th><th>Current plan</th><th>Cloudflare-native</th></tr></thead>
+        <tbody>
+          <tr><td class="layer">API compute</td><td class="was">NestJS on Node, Docker on a VPS</td><td class="now">Cloudflare Workers, <b>Hono</b> framework <span class="tag new">rewrite</span></td></tr>
+          <tr><td class="layer">Background jobs</td><td class="was">BullMQ + Redis, <code>worker.ts</code></td><td class="now">Cloudflare Queues + Cron Triggers <span class="tag new">rewrite</span></td></tr>
+          <tr><td class="layer">Database</td><td class="was">Postgres 17 in a container you own</td><td class="now">Neon serverless Postgres (your account) via Hyperdrive <span class="tag new">new dependency</span></td></tr>
+          <tr><td class="layer">Cache / rate limits</td><td class="was">Redis</td><td class="now">Workers KV + Durable Objects <span class="tag new">rewrite</span></td></tr>
+          <tr><td class="layer">Storefront + admin</td><td class="was">Next.js in a Docker container</td><td class="now">Cloudflare Pages via OpenNext <span class="tag new">re-deploy target</span></td></tr>
+          <tr class="unchanged-row"><td class="layer">Object storage</td><td class="was">Cloudflare R2</td><td class="now">Cloudflare R2 <span class="tag same">unchanged</span></td></tr>
+          <tr class="unchanged-row"><td class="layer">DNS / CDN / TLS</td><td class="was">Cloudflare + Caddy on the VPS</td><td class="now">Cloudflare (Caddy retired) <span class="tag same">simplified</span></td></tr>
+          <tr class="unchanged-row"><td class="layer">Data model</td><td class="was">Prisma schema, 61 models</td><td class="now">Same schema, same migrations <span class="tag same">unchanged</span></td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <span class="num">02 · the shape of it</span>
+    <h2>System diagram</h2>
+    <figure>
+      <pre class="mermaid">
+flowchart LR
+  subgraph Edge["Cloudflare edge"]
+    direction TB
+    W["Workers API<br/>(Hono)"]
+    Q["Queues<br/>order.confirmed · notify.send"]
+    CR["Cron Triggers<br/>capacity-hold sweep · review nudge"]
+    KV["Workers KV<br/>market cache"]
+    DO["Durable Objects<br/>OTP attempt counters"]
+    R2["R2<br/>product photos"]
+  end
+  ST["Storefront + Admin<br/>Next.js on Pages"] -->|"fetch /v1/*"| W
+  W -->|"Hyperdrive"| PG["Neon Postgres<br/>(your account)"]
+  W --> KV
+  W --> DO
+  W --> R2
+  W -->|"enqueue"| Q
+  Q -->|"consume"| W
+  CR -->|"trigger"| W
+  W -->|"webhook verify"| PAY["Razorpay / Stripe"]
+  W -->|"send"| WA["WhatsApp Cloud API / SMS"]
+      </pre>
+      <figcaption>Everything in the edge box is stateless per-request except the two things that must not be: Durable Objects (one strongly-consistent counter per phone number, for OTP attempts) and Neon (the actual system of record). Queues decouple "acknowledge the webhook" from "send the WhatsApp message."</figcaption>
+    </figure>
+  </section>
+
+  <section>
+    <span class="num">03 · compute</span>
+    <h2>Workers API — NestJS → Hono</h2>
+    <p>NestJS's decorator/DI model assumes a long-lived Node process and doesn't run on the Workers runtime. <b>Hono</b> is the standard choice for this instead — a small router built for edge runtimes (Workers, Deno, Bun, Node), with the same shape of concerns re-expressed as plain functions and middleware rather than classes and decorators:</p>
+    <div class="grid2">
+      <div class="callout keep"><h3>Maps directly</h3><p>Guards → middleware (<code>permissionsGuard()</code>, <code>customerAuthGuard()</code>). Controllers → route modules. Zod contracts → unchanged, Hono validates against the same schemas. RS256 JWT verify → Web Crypto <code>SubtleCrypto</code>, which Workers support natively.</p></div>
+      <div class="callout risk"><h3>Needs care</h3><p>Nest's request-scoped DI (one <code>PrismaService</code> instance injected everywhere) becomes explicit context passing — a per-request Prisma client bound to the Hyperdrive connection string, threaded through <code>c.set()</code>/<code>c.get()</code> rather than constructor injection.</p></div>
+    </div>
+  </section>
+
+  <section>
+    <span class="num">04 · database</span>
+    <h2>Neon Postgres via Hyperdrive</h2>
+    <p>Cloudflare doesn't host a relational database itself. <b>Hyperdrive</b> is a connection-pooling proxy in front of a Postgres you already have somewhere else — it doesn't replace Neon, it makes talking to Neon from a Worker fast and connection-safe. This is deliberately the smallest change in the whole migration: the schema, the 61 Prisma models, every migration, the seed data, and — critically — the guarded capacity SQL are all Postgres-specific and stay <em>exactly</em> as written.</p>
+    <pre class="code">-- unchanged from apps/api/src/modules/capacity/capacity.repository.ts
+UPDATE production_capacity
+SET    "reservedUnits" = "reservedUnits" + $1, "updatedAt" = now()
+WHERE  "id" = $2::uuid
+  AND  "status" = 'OPEN'
+  AND  "reservedUnits" + $1 <= "capacityUnits"
+RETURNING ("capacityUnits" - "reservedUnits")::int AS remaining;
+<span class="c">-- same statement, same guarantee, now reached through Hyperdrive instead of a local pool</span></pre>
+    <p>Prisma's driver-adapter pattern (already in use for the same reason the Prisma CLI download is blocked here) is what makes this possible — swap <code>@prisma/adapter-pg</code>'s connection string for the Hyperdrive binding, and the rest of the repository code is untouched.</p>
+  </section>
+
+  <section>
+    <span class="num">05 · background jobs</span>
+    <h2>BullMQ → Queues + Cron Triggers</h2>
+    <div class="job-map">
+      <div class="job-row"><span class="from">Capacity-hold expiry sweep (every few min)</span><span class="arrow">→</span><span class="to">Cron Trigger</span></div>
+      <div class="job-row"><span class="from">Order-confirmed → WhatsApp/SMS send</span><span class="arrow">→</span><span class="to">Queue consumer</span></div>
+      <div class="job-row"><span class="from">Production/packing/delivery status notifications</span><span class="arrow">→</span><span class="to">Queue consumer</span></div>
+      <div class="job-row"><span class="from">Review-request delayed send</span><span class="arrow">→</span><span class="to">Queue (delayed message)</span></div>
+      <div class="job-row"><span class="from">Razorpay / Stripe webhook receipt</span><span class="arrow">→</span><span class="to">Worker route (sync ack) + Queue (follow-up)</span></div>
+    </div>
+    <p style="margin-top:14px">The notification "transactional outbox" pattern is unchanged — a row is still written inside the same DB transaction as the business event; only the thing that <em>drains</em> that outbox moves from a BullMQ worker to a Cron-triggered sweep or a Queue consumer.</p>
+  </section>
+
+  <section>
+    <span class="num">06 · state that isn't a request</span>
+    <h2>Caching &amp; rate limits — KV and Durable Objects</h2>
+    <div class="grid2">
+      <div class="card stack">
+        <h3 style="color:var(--brand-ink)">Workers KV</h3>
+        <p style="font-size:.92rem">Market-by-host resolution cache (was Redis, 60s TTL) and the availability-date cache. Eventually consistent — fine for both, since both already tolerate a short staleness window.</p>
+      </div>
+      <div class="card stack">
+        <h3 style="color:var(--brand-ink)">Durable Objects</h3>
+        <p style="font-size:.92rem">OTP attempt/resend counters and per-phone/per-IP rate limits need <em>strong</em> consistency (a race here is a security bug, not a UX one) — one Durable Object instance per phone number replaces the Redis <code>INCR</code>-with-TTL pattern.</p>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <span class="num">07 · frontend</span>
+    <h2>Storefront &amp; admin on Cloudflare Pages</h2>
+    <p>Next.js 15 deploys to Cloudflare Pages via the OpenNext Cloudflare adapter, which supports the App Router features already in use (server components, route handlers, image optimization). The market-resolution-by-<code>Host</code> middleware, the <code>X-Market-Host</code> forwarding to the API, and the whole component tree carry over unchanged — this is a build-target change, not a rewrite.</p>
+  </section>
+
+  <section>
+    <span class="num">08 · what doesn't move</span>
+    <h2>Unchanged, on purpose</h2>
+    <div class="card">
+      <ul class="plain tick">
+        <li>Prisma schema — all 61 models, 21 enums, every relation and constraint</li>
+        <li>The capacity-reservation SQL and its concurrency proof (same statement, same guarantee, re-run against Neon before cutover)</li>
+        <li>RBAC model — permission rows in the DB, one guard, no scattered role checks</li>
+        <li>Zod contracts package — client still can't construct a request the API accepts but rejects</li>
+        <li>Four independent order status columns, idempotency keys, webhook exactly-once handling</li>
+        <li>Seed data, delivery zones, brand and storefront design</li>
+      </ul>
+    </div>
+  </section>
+
+  <section>
+    <span class="num">09 · action needed from you</span>
+    <h2>Accounts I can't create for you</h2>
+    <div class="grid2">
+      <div class="callout action">
+        <h3>Neon (or Supabase) account</h3>
+        <p>A serverless Postgres provider, for the same reason a VPS needed provisioning — I can build and test everything against a local Postgres in the meantime, but production needs a real one, and account creation isn't something I can do on your behalf.</p>
+      </div>
+      <div class="callout action">
+        <h3><code>wrangler login</code></h3>
+        <p>Cloudflare's CLI auth opens a browser OAuth flow. Same reason the GitHub push needed you in the loop — I won't handle account credentials or tokens directly, so this step runs on your machine, once, and after that deploys are one command.</p>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <span class="num">10 · rollout</span>
+    <h2>Migration phases</h2>
+    <div class="phases">
+      <div class="phase"><div class="ph-k">1.5a</div><div><h3>Compute + capacity</h3><p>Scaffold the Hono app; port auth and the capacity module first — highest-risk, already fully proven. Re-run the concurrency test against the same Postgres, through the Hyperdrive-compatible driver path.</p></div></div>
+      <div class="phase"><div class="ph-k">1.5b</div><div><h3>Remaining modules</h3><p>Catalogue, pricing, cart, customers, delivery, markets — same porting pattern, module by module.</p></div></div>
+      <div class="phase"><div class="ph-k">1.5c</div><div><h3>Jobs</h3><p>Replace BullMQ producers/consumers with Queues and Cron Triggers per the mapping in §05.</p></div></div>
+      <div class="phase"><div class="ph-k">1.5d</div><div><h3>Frontend</h3><p>Adapt storefront + admin builds to the OpenNext Cloudflare adapter; deploy to Pages.</p></div></div>
+      <div class="phase"><div class="ph-k">1.5e</div><div><h3>Cutover</h3><p>Neon account created, Hyperdrive bound, DNS pointed at Pages + Workers custom domains. Docker/VPS plan retired; docs updated.</p></div></div>
+    </div>
+  </section>
+
+  <section>
+    <span class="num">11 · read before you approve</span>
+    <h2>Honest risks</h2>
+    <div class="card stack">
+      <div class="callout risk"><h3>Local dev changes shape</h3><p><code>docker compose up</code> stops being the whole story; local development moves to <code>wrangler dev</code> / Miniflare. Workable, but it's a different day-to-day than what's documented in the repo today.</p></div>
+      <div class="callout risk"><h3>CPU time per request is capped</h3><p>Long synchronous work — the ~440-SKU CSV import, big admin reports — needs to run as a Queue consumer or a Cron-triggered batch rather than one request, not because it's slow but because Workers cap how long a single invocation may run.</p></div>
+      <div class="callout risk"><h3>Newer tooling than the VPS path</h3><p>Prisma's edge/Hyperdrive driver adapters are less battle-tested than the plain <code>pg</code> adapter already proven in this repo. Worth re-verifying corners (raw SQL, transactions) as each module ports, not assuming parity.</p></div>
+      <div class="callout risk"><h3>More platform lock-in, not less</h3><p>Queues, Durable Objects, KV and Hyperdrive are all Cloudflare-specific. Leaving the VPS plan trades "any Docker host" portability for "any Cloudflare account" portability — a reasonable trade, but worth naming.</p></div>
+    </div>
+  </section>
+
+  <footer>
+    <p><b style="color:var(--ink)">Next step:</b> scaffolding the Hono app and porting the auth + capacity modules starts now, developed and proven against the local Postgres exactly as before. The Neon connection swaps in the moment that account exists — nothing about the module-porting work waits on it.</p>
+  </footer>
+
+</div>
