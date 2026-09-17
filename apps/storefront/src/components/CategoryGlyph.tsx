@@ -23,8 +23,8 @@ const box = {
 };
 
 /** The warm mass inside a drawing; the amber accent picks out one detail. */
-const WASH = "var(--amber-tint)";
-const ACCENT = "var(--amber)";
+const WASH = "var(--brass-tint)";
+const ACCENT = "var(--brass)";
 
 /** Podis — spice ground in a stone mortar, pestle resting in it. */
 const Podi = () => (

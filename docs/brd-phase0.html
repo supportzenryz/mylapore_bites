@@ -1,0 +1,404 @@
+<title>BRD Gap Analysis</title>
+<style>
+  :root{
+    --paper:#FAF9F6; --surface:#FFFFFF; --surface-2:#F2F0EA;
+    --ink:#1B1A17; --ink-2:#57534B; --ink-3:#817B70;
+    --line:#E3DFD6; --line-2:#D3CEC2;
+    --navy:#123B54; --navy-tint:#E9F0F4; --navy-edge:#C3D5E0;
+    --built:#2E6F44; --built-tint:#E8F3EB; --built-edge:#C6E0CE;
+    --partial:#8A5A05; --partial-tint:#FBF1DE; --partial-edge:#EBD7AC;
+    --none:#9B3535; --none-tint:#FAEAEA; --none-edge:#EACBCB;
+    --shadow: 0 1px 2px rgba(27,26,23,.05), 0 10px 26px -16px rgba(27,26,23,.25);
+    --display:"Newsreader", Georgia, "Times New Roman", serif;
+    --body:"Public Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+    --mono:"IBM Plex Mono", ui-monospace, Consolas, monospace;
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --paper:#141311; --surface:#1B1A17; --surface-2:#221F1B;
+      --ink:#EFEDE7; --ink-2:#B8B3A8; --ink-3:#8B857A;
+      --line:#2E2B26; --line-2:#3C382F;
+      --navy:#7FB4D0; --navy-tint:#16242C; --navy-edge:#2A4250;
+      --built:#7FC395; --built-tint:#152219; --built-edge:#2A4433;
+      --partial:#DCA94F; --partial-tint:#231B0F; --partial-edge:#463719;
+      --none:#E08585; --none-tint:#241414; --none-edge:#4A2525;
+      --shadow: 0 1px 2px rgba(0,0,0,.35), 0 10px 26px -16px rgba(0,0,0,.6);
+    }
+  }
+  :root[data-theme="dark"]{
+    --paper:#141311; --surface:#1B1A17; --surface-2:#221F1B;
+    --ink:#EFEDE7; --ink-2:#B8B3A8; --ink-3:#8B857A;
+    --line:#2E2B26; --line-2:#3C382F;
+    --navy:#7FB4D0; --navy-tint:#16242C; --navy-edge:#2A4250;
+    --built:#7FC395; --built-tint:#152219; --built-edge:#2A4433;
+    --partial:#DCA94F; --partial-tint:#231B0F; --partial-edge:#463719;
+    --none:#E08585; --none-tint:#241414; --none-edge:#4A2525;
+    --shadow: 0 1px 2px rgba(0,0,0,.35), 0 10px 26px -16px rgba(0,0,0,.6);
+  }
+
+  *{box-sizing:border-box;}
+  body{
+    background:var(--paper); color:var(--ink);
+    font-family:var(--body); font-size:16px; line-height:1.62;
+    padding-inline:20px; padding-block:40px;
+  }
+  .wrap{max-width:840px; margin:0 auto;}
+  h1,h2,h3{font-family:var(--display); font-weight:600; text-wrap:balance; color:var(--ink);}
+  h1{font-size:clamp(1.8rem,5vw,2.5rem); line-height:1.12; margin:0 0 8px; letter-spacing:-.015em;}
+  h2{font-size:1.4rem; margin:0 0 6px; letter-spacing:-.01em;}
+  h3{font-size:1.02rem; margin:0 0 4px;}
+  p{margin:0 0 14px; max-width:68ch;}
+  .lede{color:var(--ink-2); font-size:1.06rem; max-width:62ch;}
+  code,.mono{font-family:var(--mono); font-size:.87em;}
+  code{background:var(--surface-2); border:1px solid var(--line); border-radius:4px; padding:.05em .38em;}
+  strong{font-weight:650;}
+
+  header{padding-bottom:26px; border-bottom:1px solid var(--line); margin-bottom:32px;}
+  .kicker{
+    display:inline-flex; align-items:center; gap:8px;
+    font-family:var(--mono); font-size:.71rem; letter-spacing:.09em; text-transform:uppercase;
+    color:var(--navy); background:var(--navy-tint); border:1px solid var(--navy-edge);
+    padding:5px 11px; border-radius:999px; margin-bottom:16px;
+  }
+  .meta-row{display:flex; flex-wrap:wrap; gap:10px 24px; margin-top:18px;}
+  .meta{font-size:.86rem; color:var(--ink-2);}
+  .meta b{display:block; font-size:.67rem; text-transform:uppercase; letter-spacing:.08em; color:var(--ink-3); font-weight:600; margin-bottom:2px;}
+
+  section{margin-block:40px;}
+  .num{
+    font-family:var(--mono); font-size:.72rem; color:var(--ink-3);
+    letter-spacing:.09em; text-transform:uppercase; display:block; margin-bottom:8px;
+  }
+
+  /* ---- conflict blocks ---- */
+  .conflict{
+    background:var(--surface); border:1px solid var(--line); border-left:3px solid var(--none);
+    border-radius:8px; padding:18px 20px; box-shadow:var(--shadow);
+  }
+  .conflict + .conflict{margin-top:14px;}
+  .conflict h3{color:var(--none); display:flex; align-items:baseline; gap:9px; flex-wrap:wrap;}
+  .conflict h3 .tag{
+    font-family:var(--mono); font-size:.64rem; letter-spacing:.06em; text-transform:uppercase;
+    background:var(--none-tint); border:1px solid var(--none-edge); color:var(--none);
+    padding:2px 7px; border-radius:4px; font-weight:500;
+  }
+  .versus{display:grid; gap:12px; margin:12px 0 0;}
+  @media (min-width:640px){ .versus{grid-template-columns:1fr 1fr;} }
+  .side{background:var(--surface-2); border:1px solid var(--line); border-radius:6px; padding:12px 14px;}
+  .side b{display:block; font-size:.68rem; text-transform:uppercase; letter-spacing:.08em; color:var(--ink-3); margin-bottom:5px;}
+  .side p{margin:0; font-size:.92rem; color:var(--ink-2);}
+
+  /* ---- swatches ---- */
+  .swatches{display:flex; flex-wrap:wrap; gap:8px; margin-top:10px;}
+  .sw{display:flex; align-items:center; gap:7px; font-family:var(--mono); font-size:.72rem; color:var(--ink-2);}
+  .sw i{width:20px; height:20px; border-radius:4px; border:1px solid rgba(0,0,0,.14); display:block;}
+
+  /* ---- table ---- */
+  .tbl-wrap{overflow-x:auto; border:1px solid var(--line); border-radius:8px; background:var(--surface); box-shadow:var(--shadow);}
+  table{border-collapse:collapse; width:100%; min-width:640px; font-size:.9rem;}
+  th,td{text-align:left; padding:11px 13px; border-bottom:1px solid var(--line); vertical-align:top;}
+  thead th{font-family:var(--mono); font-size:.68rem; text-transform:uppercase; letter-spacing:.07em; color:var(--ink-3); background:var(--surface-2);}
+  tbody tr:last-child td{border-bottom:none;}
+  td.id{font-family:var(--mono); font-size:.8rem; white-space:nowrap; font-weight:600;}
+  td.p{font-family:var(--mono); font-size:.74rem; color:var(--ink-3);}
+
+  .chip{
+    display:inline-block; font-family:var(--mono); font-size:.66rem; letter-spacing:.05em;
+    text-transform:uppercase; padding:2px 7px; border-radius:4px; white-space:nowrap; border:1px solid;
+  }
+  .chip.built{background:var(--built-tint); color:var(--built); border-color:var(--built-edge);}
+  .chip.partial{background:var(--partial-tint); color:var(--partial); border-color:var(--partial-edge);}
+  .chip.none{background:var(--none-tint); color:var(--none); border-color:var(--none-edge);}
+  .chip.defer{background:var(--surface-2); color:var(--ink-3); border-color:var(--line-2);}
+
+  .evidence{font-family:var(--mono); font-size:.74rem; color:var(--ink-3); display:block; margin-top:4px;}
+
+  /* ---- plain lists ---- */
+  ul.plain{list-style:none; margin:0; padding:0;}
+  ul.plain li{padding:8px 0; border-bottom:1px dashed var(--line); font-size:.94rem; color:var(--ink-2);}
+  ul.plain li:last-child{border-bottom:none;}
+  ul.plain li b{color:var(--ink);}
+
+  .card{background:var(--surface); border:1px solid var(--line); border-radius:8px; padding:18px 20px; box-shadow:var(--shadow);}
+
+  /* ---- slices ---- */
+  .slice{display:grid; grid-template-columns:52px 1fr; gap:16px; padding-block:15px; border-top:1px solid var(--line);}
+  .slice:first-child{border-top:none;}
+  .slice-n{font-family:var(--mono); font-size:.76rem; color:var(--navy); background:var(--navy-tint); border:1px solid var(--navy-edge); border-radius:5px; height:fit-content; padding:3px 0; text-align:center;}
+  .slice p{margin:0 0 6px; font-size:.93rem; color:var(--ink-2);}
+  .slice .covers{font-family:var(--mono); font-size:.72rem; color:var(--ink-3);}
+
+  footer{margin-top:48px; padding-top:22px; border-top:1px solid var(--line);}
+  footer p{color:var(--ink-2); font-size:.92rem;}
+</style>
+
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Newsreader:opsz,wght@6..72,500;6..72,600&family=Public+Sans:wght@400;500;650&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+
+<div class="wrap">
+
+  <header>
+    <span class="kicker">Phase 0 · before any code is written</span>
+    <h1>BRD Gap Analysis</h1>
+    <p class="lede">What the End-to-End BRD asks for, measured against what actually exists in the repository today — plus three conflicts between the document and decisions already made that need settling before work continues.</p>
+    <div class="meta-row">
+      <div class="meta"><b>Source</b>Mylapore_Bites_End_to_End_BRD.docx v1.0</div>
+      <div class="meta"><b>Audited against</b>commit fdd6e64, 8 commits</div>
+      <div class="meta"><b>P0 requirements</b>9 of 14</div>
+      <div class="meta"><b>Date</b>17 Sep 2026</div>
+    </div>
+  </header>
+
+  <section>
+    <span class="num">01 — read this first</span>
+    <h2>Three conflicts that need your decision</h2>
+    <p>The BRD's category counts match this repository's seed data exactly — Podis 1, Savouries 2, Nuts &amp; Spices 0, and so on — so it was clearly written with the current storefront in view. That makes the following three disagreements look like drift rather than deliberate reversals, which is exactly why they need confirming rather than assuming.</p>
+
+    <div class="conflict">
+      <h3>The business model <span class="tag">blocking · affects everything</span></h3>
+      <p>This is the one that matters most, because it decides what the order and inventory foundation actually is.</p>
+      <div class="versus">
+        <div class="side">
+          <b>What's built</b>
+          <p>Orders reserve <strong>future kitchen production capacity</strong>. Nothing sits on a shelf; you pick a delivery date and the kitchen cooks for it. The guarded SQL that prevents overbooking is built and proven under concurrency.</p>
+        </div>
+        <div class="side">
+          <b>What the BRD describes</b>
+          <p>Orders draw down <strong>warehouse stock</strong>: on-hand vs reserved vs quarantined, batch and best-before tracking, FEFO picking, goods receipt, cycle counts, pick tasks and bins.</p>
+        </div>
+      </div>
+      <p style="margin-top:12px; font-size:.93rem;">These are different systems, not different wordings. The schema already carries a <code>StockMode</code> per product — <code>STOCKED</code>, <code>FRESH_PREORDER</code>, <code>LIMITED_DAILY</code>, <code>PREORDER_ONLY</code> — so both can coexist. What's undecided is which one is the centre of gravity, and therefore what gets built next and how much warehouse machinery is worth building at all.</p>
+    </div>
+
+    <div class="conflict">
+      <h3>The palette <span class="tag">blocking · contradicts a recent instruction</span></h3>
+      <p>The BRD's D-03 is marked "Accepted direction", but its maroon is the colour you specifically asked to remove ("white BG and no kukum color"), and the storefront was retoned to the eatdesi.uk palette two days ago at your request.</p>
+      <div class="versus">
+        <div class="side">
+          <b>BRD palette (D-03)</b>
+          <div class="swatches">
+            <span class="sw"><i style="background:#702C35"></i>#702C35</span>
+            <span class="sw"><i style="background:#B58A45"></i>#B58A45</span>
+            <span class="sw"><i style="background:#F8F1E5"></i>#F8F1E5</span>
+            <span class="sw"><i style="background:#456448"></i>#456448</span>
+            <span class="sw"><i style="background:#292725"></i>#292725</span>
+          </div>
+        </div>
+        <div class="side">
+          <b>Currently live in the repo</b>
+          <div class="swatches">
+            <span class="sw"><i style="background:#0B7A7A"></i>#0B7A7A</span>
+            <span class="sw"><i style="background:#0B3C5C"></i>#0B3C5C</span>
+            <span class="sw"><i style="background:#E3A002"></i>#E3A002</span>
+            <span class="sw"><i style="background:#2E7D46"></i>#2E7D46</span>
+            <span class="sw"><i style="background:#FFFFFF"></i>#FFFFFF</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="conflict">
+      <h3>The launch market <span class="tag">blocking · changes payments, tax, copy</span></h3>
+      <div class="versus">
+        <div class="side">
+          <b>BRD</b>
+          <p>United Kingdom first. GBP. Stripe as candidate. UK VAT, distance-selling and food-labelling advisers.</p>
+        </div>
+        <div class="side">
+          <b>What's built</b>
+          <p>India first. INR, <code>Asia/Kolkata</code>, four real Chennai delivery zones with live PIN codes, Razorpay. The UK market row exists and is seeded but inactive.</p>
+        </div>
+      </div>
+      <p style="margin-top:12px; font-size:.93rem;">The multi-market architecture handles either — market is a database row, never a branch in code — so this is a sequencing decision, not a rebuild. But it changes which payment provider gets wired first, which tax rules get modelled, and whether delivery zones are Chennai PIN codes or UK postcodes.</p>
+    </div>
+  </section>
+
+  <section>
+    <span class="num">02 — traceability</span>
+    <h2>Every BR- requirement against real code</h2>
+    <p>Status is based on reading the repository, not on what was intended. "Partial" means some of it genuinely runs; evidence names the file so you can check any row yourself.</p>
+
+    <div class="tbl-wrap">
+      <table>
+        <thead>
+          <tr><th>ID</th><th>Pri</th><th>Requirement</th><th>Status</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td class="id">BR-001</td><td class="p">P0</td>
+            <td>Browse published categories/products; unavailable items not purchasable.
+              <span class="evidence">apps/storefront (10 pages) · modules/catalog · verified 390px &amp; 1280px</span></td>
+            <td><span class="chip partial">Partial</span><span class="evidence">browse built; the "cannot purchase" half needs checkout</span></td>
+          </tr>
+          <tr>
+            <td class="id">BR-002</td><td class="p">P0</td>
+            <td>Category grid matches the visual reference: bordered cards, circular icons, labels, responsive, accessible focus.
+              <span class="evidence">components/CategoryGlyph.tsx · 15 illustrations · 3-col mobile / 5-col desktop</span></td>
+            <td><span class="chip built">Built</span><span class="evidence">subject to the palette decision</span></td>
+          </tr>
+          <tr>
+            <td class="id">BR-003</td><td class="p">P0</td>
+            <td>Guest checkout with server-validated totals and a configured delivery method.
+              <span class="evidence">no checkout module exists</span></td>
+            <td><span class="chip none">Not started</span><span class="evidence">also blocked: <code>Order.customerId</code> is non-nullable</span></td>
+          </tr>
+          <tr>
+            <td class="id">BR-004</td><td class="p">P0</td>
+            <td>Payment verified server-side; duplicate webhooks don't duplicate orders or stock movements.
+              <span class="evidence">models ready: Payment, WebhookEvent unique(provider,externalId), IdempotencyKey</span></td>
+            <td><span class="chip none">Not started</span><span class="evidence">foundations present, no payments code</span></td>
+          </tr>
+          <tr>
+            <td class="id">BR-005</td><td class="p">P0</td>
+            <td>Admin can find an order and see items, payment, fulfilment and event history.
+              <span class="evidence">apps/admin is a single scaffold page</span></td>
+            <td><span class="chip none">Not started</span></td>
+          </tr>
+          <tr>
+            <td class="id">BR-006</td><td class="p">P0</td>
+            <td>Staff can pick, pack and dispatch with status history and customer notification.
+              <span class="evidence">Shipment + DeliveryEvent models exist; no PickTask model; notification outbox built</span></td>
+            <td><span class="chip none">Not started</span></td>
+          </tr>
+          <tr>
+            <td class="id">BR-007</td><td class="p">P0</td>
+            <td>Concurrent checkout cannot sell more than available.
+              <span class="evidence">capacity.repository.ts · tests/concurrency/*.mjs — 30 concurrent vs 29 capacity, never oversold</span></td>
+            <td><span class="chip partial">Partial</span><span class="evidence">proven for production capacity; no equivalent for stocked quantity</span></td>
+          </tr>
+          <tr>
+            <td class="id">BR-008</td><td class="p">P0</td>
+            <td>Permissions prevent unauthorised refunds, price changes, stock write-offs, user admin.
+              <span class="evidence">PermissionsGuard + 47 DB-backed permissions + 9 roles + audit interceptor</span></td>
+            <td><span class="chip partial">Partial</span><span class="evidence">no Finance role, no approval limits, refund permission unexercised</span></td>
+          </tr>
+          <tr>
+            <td class="id">BR-009</td><td class="p">P0</td>
+            <td>Cancellation/refund preserves financial history and corrects stock.
+              <span class="evidence">reservation release proven idempotent under double-fire; Refund model exists, no code</span></td>
+            <td><span class="chip partial">Partial</span></td>
+          </tr>
+          <tr>
+            <td class="id">BR-010</td><td class="p">P1</td>
+            <td>Batch/expiry tracking with FEFO pick suggestions.
+              <span class="evidence">ProductionBatch exists (production lots), not finished-goods best-before</span></td>
+            <td><span class="chip none">Not started</span></td>
+          </tr>
+          <tr>
+            <td class="id">BR-011</td><td class="p">P1</td>
+            <td>Configurable promotions: dates, eligibility, limits, stacking policy.
+              <span class="evidence">Coupon, CouponRedemption, PromotionRule models exist; no code</span></td>
+            <td><span class="chip none">Not started</span></td>
+          </tr>
+          <tr>
+            <td class="id">BR-012</td><td class="p">P1</td>
+            <td>Reports: sales, backlog, stock alerts, fulfilment measures.
+              <span class="evidence">report:* permissions defined; no reporting code</span></td>
+            <td><span class="chip none">Not started</span></td>
+          </tr>
+          <tr>
+            <td class="id">BR-013</td><td class="p">P1</td>
+            <td>Customer order history and secure tracking.
+              <span class="evidence">/me controller exists (profile/addresses); no order endpoints</span></td>
+            <td><span class="chip none">Not started</span></td>
+          </tr>
+          <tr>
+            <td class="id">BR-014</td><td class="p">P2</td>
+            <td>Multi-warehouse, supplier portal, subscriptions, apps addable via modules/APIs.
+              <span class="evidence">Warehouse model + market-as-row + modular boundaries already support this</span></td>
+            <td><span class="chip defer">Deferred</span><span class="evidence">by design; architecture ready</span></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <p style="margin-top:16px;"><strong>Honest summary:</strong> one P0 fully built, four partial, four not started. What exists is the foundation — catalogue, cart, auth, permissions, the capacity engine and the storefront. What does not exist is the commercial spine: <em>checkout → payment → order → fulfilment</em>. That is the next body of work, and it is the bulk of the BRD.</p>
+  </section>
+
+  <section>
+    <span class="num">03 — worth knowing</span>
+    <h2>Things the audit turned up</h2>
+    <div class="card">
+      <ul class="plain">
+        <li><b>Guest checkout needs a schema change.</b> <code>Order.customerId</code> is currently required, so an order cannot exist without a registered customer. BR-003 is P0, so this migration comes first in the checkout slice.</li>
+        <li><b>The overselling proof covers half of BR-007.</b> It is genuinely proven — 30 concurrent checkouts against capacity for 29 yield exactly 29, never more — but it protects <em>kitchen capacity</em>. A product marked <code>STOCKED</code> has no equivalent atomic guard yet.</li>
+        <li><b>Authentication doesn't match the BRD's API sketch.</b> The BRD lists <code>/auth/register</code>, <code>/auth/login</code>, <code>/auth/forgot-password</code> — password-based. What's built is phone + WhatsApp OTP with SMS fallback, and no customer password at all. Not a conflict worth blocking on, but the BRD's endpoint list won't match reality unless email/password is added alongside.</li>
+        <li><b>Permissions are kitchen-shaped, not warehouse-shaped.</b> There are <code>production:capacity</code>, <code>production:batch</code>, <code>production:plan</code> and <code>packing:order</code> permissions, but no pick-task, stocktake or cycle-count permissions, and no Finance role with refund limits.</li>
+        <li><b>Several BRD entities already exist as models with no code behind them.</b> Order, OrderItem, Payment, Refund, Shipment, Coupon, PromotionRule, InventoryItem, AuditLog, IdempotencyKey. The migration cost of the next phases is lower than the BRD implies.</li>
+        <li><b>Prisma tooling is still blocked in this sandbox.</b> <code>binaries.prisma.sh</code> returns 403, so <code>prisma generate</code> and <code>migrate</code> cannot run here. They work on any normal network — your machine included — but it means migrations are authored here and run on your side.</li>
+      </ul>
+    </div>
+  </section>
+
+  <section>
+    <span class="num">04 — not in the BRD</span>
+    <h2>Built work the BRD doesn't mention</h2>
+    <p>Listed so nothing gets quietly discarded if the BRD is treated as the sole source of truth:</p>
+    <div class="card">
+      <ul class="plain">
+        <li><b>The production capacity engine</b> — cut-off times, production weekdays, lead times, per-day capacity, "next available date" answers instead of bare refusals.</li>
+        <li><b>WhatsApp OTP authentication</b> with SMS fallback, Argon2id-hashed codes, rotating refresh tokens with reuse detection.</li>
+        <li><b>Delivery zones and slots</b> — polygon and PIN-code matching, per-zone fees and minimums, slot capacity allocation.</li>
+        <li><b>Multi-market architecture</b> — <code>.com</code> and <code>.co.uk</code> from one backend, market resolved from the request host, market-scoped pricing.</li>
+        <li><b>The Cloudflare migration</b>, one module in. Note the BRD's architecture table proposes NestJS + Redis + BullMQ on AWS or a VPS, which describes the pre-migration stack.</li>
+      </ul>
+    </div>
+  </section>
+
+  <section>
+    <span class="num">05 — the plan</span>
+    <h2>Delivery in vertical slices</h2>
+    <p>Each slice ships schema, code, tests and documentation together, in dependency order. Slices 1–5 complete every P0.</p>
+    <div class="card" style="padding-block:6px;">
+      <div class="slice"><div class="slice-n">1</div><div>
+        <h3>Checkout and orders</h3>
+        <p>Guest-order migration, the availability engine wired to the cart, server-authoritative quote, order creation that confirms the capacity hold, order number allocation, confirmation notification.</p>
+        <span class="covers">BR-001 · BR-003 · BR-013</span>
+      </div></div>
+      <div class="slice"><div class="slice-n">2</div><div>
+        <h3>Payments, webhooks, refunds</h3>
+        <p>Provider abstraction wired to a real provider, hosted/tokenised payment, signed webhook verification, exactly-once processing, refund requests with reason and permission.</p>
+        <span class="covers">BR-004 · BR-009</span>
+      </div></div>
+      <div class="slice"><div class="slice-n">3</div><div>
+        <h3>Admin order management</h3>
+        <p>The admin app beyond its scaffold: order queue with saved filters, order detail with timeline and event log, permission-gated actions, Finance role and approval limits.</p>
+        <span class="covers">BR-005 · BR-008</span>
+      </div></div>
+      <div class="slice"><div class="slice-n">4</div><div>
+        <h3>Stock and available-to-sell</h3>
+        <p>Atomic reservation for <code>STOCKED</code> products, mirroring the capacity guard; on-hand / reserved / quarantined split; movement ledger as source of truth. Scope depends on the business-model decision above.</p>
+        <span class="covers">BR-007 (stock half) · BR-010 groundwork</span>
+      </div></div>
+      <div class="slice"><div class="slice-n">5</div><div>
+        <h3>Fulfilment</h3>
+        <p>Pick tasks, scan verification, packing checklist, dispatch with carrier and tracking, customer notifications at each transition, exception queues.</p>
+        <span class="covers">BR-006</span>
+      </div></div>
+      <div class="slice"><div class="slice-n">6</div><div>
+        <h3>Promotions</h3>
+        <p>Rule builder, eligibility and limits, server-side validation, concurrency-safe redemption, discount recorded in the order snapshot.</p>
+        <span class="covers">BR-011</span>
+      </div></div>
+      <div class="slice"><div class="slice-n">7</div><div>
+        <h3>Reporting</h3>
+        <p>Sales, orders, products, inventory and operations reports with each metric defined in writing, CSV export with role controls and export logging.</p>
+        <span class="covers">BR-012</span>
+      </div></div>
+      <div class="slice"><div class="slice-n">8</div><div>
+        <h3>Batch, expiry and FEFO</h3>
+        <p>Finished-goods batches with best-before dates, quarantine and recall states, FEFO pick suggestion with reasoned override.</p>
+        <span class="covers">BR-010</span>
+      </div></div>
+      <div class="slice"><div class="slice-n">9</div><div>
+        <h3>Hardening and launch readiness</h3>
+        <p>Security tests (RBAC, IDOR, rate limits), accessibility audit to WCAG 2.2 AA, backup and restore rehearsal, monitoring, runbooks and staff SOPs.</p>
+        <span class="covers">§17 · §18 · §20 · §24</span>
+      </div></div>
+    </div>
+  </section>
+
+  <footer>
+    <p><strong>To start slice 1</strong> I need the three decisions in section 01 — chiefly the business model, since it determines whether slice 4 is a small addition or a major build. Everything else in the BRD's decision register (D-01 to D-16) can proceed on labelled, configurable assumptions as the document itself permits.</p>
+  </footer>
+
+</div>

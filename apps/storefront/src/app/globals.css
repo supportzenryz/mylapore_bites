@@ -1,94 +1,82 @@
 /* ==========================================================================
    Mylapore Bites — design system
    --------------------------------------------------------------------------
-   RETONED to the colour tone and feel of eatdesi.uk (reference site,
-   sampled directly from live screenshots — see
-   claude/design-eatdesi-retone.md for the full pixel-sampled readout):
+   PALETTE PER THE END-TO-END BRD, decision D-03 (§4.1, table 4):
 
-     #099999  teal    — their signature colour, everywhere on the page
-     #024665  navy    — the ticker strip and one deep accent surface
-     #E3A002  amber   — product-packaging gold, their eyebrow/label accent
+     #702C35  deep maroon — primary brand, headings, key buttons, nav
+     #B58A45  brass       — highlights, borders, badges, decoration
+     #F8F1E5  warm ivory  — primary page background and warm surfaces
+     #456448  leaf green  — secondary actions, freshness/natural cues
+     #292725  charcoal    — body text and high-contrast content
 
-   Same white-ground, hairline-border commerce layout as before; what
-   changes is the accent system (was forest green / terracotta / brass,
-   sampled from the Mylapore Bites logo) and one new "feel" element, the
-   scrolling marquee ticker under the header (see .marquee below), which
-   eatdesi uses to carry short brand lines under its nav on every page.
+   Every value below was checked against WCAG 2.2 AA (BRD §4.4) with the
+   same luminance formula used throughout this project, on the IVORY
+   ground rather than white, because changing the ground changes every
+   ratio. The BRD's five colours mostly pass as given; the two that don't
+   are handled the same way this file has always handled it — a darker
+   "-ink" variant for text, the raw colour kept for decoration:
 
-   THE ONE TENSION WORTH KNOWING: the actual logo artwork (logo-full.png,
-   logo-lockup.png) still shows ITS own green/terracotta/brass — that image
-   is unchanged, this file only retones the surrounding page chrome. The
-   two now sit side by side rather than sharing one palette. If that
-   mismatch reads wrong in practice, the honest fix is a recoloured logo
-   variant, not a token tweak — flagged, not solved, here.
+     maroon on ivory        8.90  ✓      white on maroon    10.00  ✓
+     charcoal on ivory     13.25  ✓      leaf green on ivory 5.90  ✓
+     brass on ivory         2.80  ✗  →  --brass-ink #6E5122  6.53  ✓
 
-   ONE IMPORTANT CHANGE THIS ALSO UNDOES: the previous theme reused brand
-   green as the freshness signal too (leaf dot + "Made to order" text + a
-   green tint, never a solid fill, specifically to keep "this is a button"
-   and "this is fresh" from colliding). Now that brand is teal, freshness
-   gets its own dedicated green (--fresh) again — simpler, and the same
-   collision this avoided the first time around.
+   ONE THING TO KNOW ABOUT ERRORS: brand maroon and a conventional error
+   red measure only 1.37 against each other, so they are not reliably
+   distinguishable by hue. BRD §4.4 already forbids conveying errors by
+   colour alone; here that is not a nicety but a requirement of the
+   palette itself. Every error state must carry wording or an icon.
 
-   Type is unchanged: the serif display face still echoes the actual logo
-   wordmark's construction, which retoning the chrome around it doesn't
-   alter.
+   Cards are white on the ivory ground rather than ivory-on-ivory, which
+   is what gives the bordered-card category grid in BRD §4.2 its
+   definition. Type is unchanged.
    ========================================================================== */
 
 :root {
   /* --- ground & ink ----------------------------------------------------- */
-  --ground:      #FFFFFF;
-  --surface:     #FFFFFF;
-  --surface-2:   #F7F6F3;  /* faint warm grey for alternating bands */
-  --surface-3:   #F1EFEA;  /* image wells */
-  --ink:         #1A1A1A;
-  --ink-2:       #5C5852;
-  --ink-3:       #726D64;  /* 5.14:1 on white, 4.75:1 on the tinted band — AA */
-  --line:        #E4E1DA;
-  --line-soft:   #EFEDE7;
+  --ground:      #F8F1E5;  /* BRD warm ivory — the page itself */
+  --surface:     #FFFFFF;  /* cards lift off the ivory */
+  --surface-2:   #F1E8D9;  /* deeper ivory for alternating bands */
+  --surface-3:   #EDE3D2;  /* image wells */
+  --ink:         #292725;  /* BRD charcoal — 13.25:1 on ivory */
+  --ink-2:       #5A544B;  /* 6.67:1 on ivory */
+  --ink-3:       #6E675C;  /* 4.98:1 on ivory — AA for small text */
+  --line:        #DCCFB8;  /* warm hairline, decorative card edges */
+  --line-soft:   #EBE1CE;
+  --line-strong: #948667;  /* 3.19:1 on ivory — for form controls, which
+                              need a visible boundary, not a hairline */
 
-  /* --- brand (retoned to eatdesi.uk's teal) ------------------------------ */
-  /* #099999 is their exact sampled teal, but it only measures 3.48:1 on
-     white — short of AA (4.5:1) for text and for white-on-brand fills.
-     --brand deepens it just enough to pass (5.15:1); --brand-ink is the
-     hover/pressed shade; --brand-mid is for icons and inline links, which
-     sit at the same weight. Verified with the same contrast formula used
-     for --ink-3 below, not eyeballed. */
-  --brand:       #0B7A7A;  /* 5.15:1 on white */
-  --brand-ink:   #075F5F;  /* hover / pressed — 7.47:1 */
-  --brand-mid:   #0C8888;  /* icons, links that need a little lift */
-  --brand-tint:  #E9F5F4;
-  --brand-edge:  #C7E4E2;
+  /* --- brand: deep maroon (BRD D-03) ------------------------------------- */
+  --brand:       #702C35;  /* 8.90:1 on ivory, 10.00:1 white-on-brand */
+  --brand-ink:   #58222A;  /* hover / pressed — 11.15:1 */
+  --brand-mid:   #8A3A44;  /* icons and inline links — 6.75:1 */
+  --brand-tint:  #F6EAEB;
+  --brand-edge:  #E3C9CC;
 
-  /* --- navy (their ticker-strip accent) — the one loud emphasis colour,
-     same role terracotta held before: a secondary CTA outline, a count
-     badge, never a surface fill. Passes AA both directions untouched
-     (11.57:1), so no darkening was needed. */
-  --navy:      #0B3C5C;
-  --navy-tint: #EAF0F4;
-  --navy-edge: #C7D6E0;
+  /* --- brass (BRD D-03) — decoration only ------------------------------- */
+  /* The raw brass is for rules, borders, badges and dots. It is 2.80:1 on
+     ivory, so it may never carry text; --brass-ink is the legible one. */
+  --brass:      #B58A45;
+  --brass-ink:  #6E5122;  /* 6.53:1 on ivory */
+  --brass-tint: #F7EFDF;
+  --brass-edge: #E6D4B4;
 
-  /* --- amber (their packaging gold) — same pattern as before: the raw
-     colour is for rules, dots and fills only (2.26:1 on white — nowhere
-     near AA for text); --amber-ink is the version legible as a label. */
-  --amber:      #E3A002;
-  --amber-ink:  #7A4E04;  /* 7.19:1 on white */
-  --amber-tint: #FCF3E1;
-  --amber-edge: #F0DBAF;
-
-  /* --- fresh (freed up now that brand isn't green) ----------------------- */
-  /* A plain, dedicated leaf green for the one thing this business actually
-     needs a colour for: "this was made after you ordered it." Never used
-     for anything else, so it can't collide with --brand the way reusing
-     brand-green did in the previous theme. */
-  --fresh:      #2E7D46;  /* 5.07:1 on white — passes as text unlike amber/navy raw */
-  --fresh-ink:  #1F5A32;  /* 8.18:1 — for text on the tinted --fresh-tint band */
-  --fresh-tint: #EAF5EC;
-  --fresh-edge: #CFE6D4;
+  /* --- leaf green (BRD D-03) -------------------------------------------- */
+  /* The BRD gives green two jobs — secondary actions AND freshness cues.
+     Those would collide if freshness were a solid green fill, so the rule
+     this project has used from the start still holds: freshness is a TINT
+     plus a leaf dot plus the words "Made to order", never a solid fill;
+     a solid green means "this is a control". */
+  --fresh:      #456448;  /* 5.90:1 on ivory, 6.63:1 white-on-green */
+  --fresh-ink:  #334B36;  /* 8.50:1 — text on the tinted band */
+  --fresh-tint: #EAF0EA;
+  --fresh-edge: #CCDBCD;
 
   /* --- feedback --------------------------------------------------------- */
-  --error:      #9B2C2C;
-  --error-tint: #FBEAEA;
-  --error-edge: #EFD2D2;
+  /* Brighter and more orange than brand maroon, deliberately — see the
+     note at the top of this file. Never the only signal. */
+  --error:      #A82015;  /* 6.49:1 on ivory */
+  --error-tint: #FBEBE9;
+  --error-edge: #EFCFCB;
 
   /* --- type ------------------------------------------------------------- */
   /* Fallbacks matter: if the webfont never loads, the page must still read as
@@ -183,7 +171,7 @@ button { font: inherit; }
   font-size: 11px;
   letter-spacing: .16em;   /* matches the logo's letterspaced lockup text */
   text-transform: uppercase;
-  color: var(--amber-ink);
+  color: var(--brass-ink);
   font-weight: 600;
   margin-bottom: 4px;
 }
@@ -230,7 +218,7 @@ button { font: inherit; }
   font-weight: 700;
   letter-spacing: .3em;
   text-transform: uppercase;
-  color: var(--navy);
+  color: var(--brass-ink);
   padding-left: 2px;
 }
 .brand-sub::before,
@@ -238,7 +226,7 @@ button { font: inherit; }
   content: "";
   flex: 1;
   height: 1px;
-  background: var(--amber);
+  background: var(--brass);
   opacity: .65;
   min-width: 10px;
 }
@@ -271,14 +259,14 @@ button { font: inherit; }
 }
 
 /* ------------------------------------------------------------- marquee --- */
-/* Borrowed straight from eatdesi.uk's feel: a dark strip directly under the
-   nav, on every page, carrying short brand lines on an endless scroll. Their
-   version runs on navy; amber dots do the separating, matching their
-   product-packaging gold. Two copies of the same list sit back to back so
-   the loop has no seam — only one half ever needs to move a full width. */
+/* A deep strip directly under the nav, on every page, carrying short brand
+   lines on an endless scroll. Runs on brand maroon with brass dots doing the
+   separating — the BRD's "announcement strip for shipping thresholds or
+   seasonal campaigns" (§4.3) in its heritage colours. Two copies of the same
+   list sit back to back so the loop has no seam. */
 .marquee {
-  background: var(--navy);
-  color: #EAF2F6;
+  background: var(--brand);
+  color: #F6EDE2;
   overflow: hidden;
   white-space: nowrap;
 }
@@ -303,7 +291,7 @@ button { font: inherit; }
 .marquee-item::after {
   content: "•";
   margin-left: 18px;
-  color: var(--amber);
+  color: var(--brass);
 }
 @keyframes marquee-scroll {
   from { transform: translateX(0); }
@@ -330,7 +318,7 @@ button { font: inherit; }
   content: "";
   position: absolute;
   inset: 0;
-  background-image: radial-gradient(var(--amber) 1.2px, transparent 1.3px);
+  background-image: radial-gradient(var(--brass) 1.2px, transparent 1.3px);
   background-size: 26px 26px;
   opacity: .10;
   pointer-events: none;
@@ -351,13 +339,13 @@ button { font: inherit; }
   font-weight: 700;
   letter-spacing: .2em;
   text-transform: uppercase;
-  color: var(--amber-ink);
+  color: var(--brass-ink);
   margin-bottom: 12px;
 }
 .hero-eyebrow::before {
   content: "";
   width: 26px; height: 1px;
-  background: var(--amber);
+  background: var(--brass);
 }
 .catlead-head h1 {
   font-family: var(--display);
@@ -412,8 +400,8 @@ button { font: inherit; }
 
 /* Terracotta is the one loud colour; it gets exactly one job — emphasis on a
    secondary call to action, never a surface fill. */
-.btn--accent { background: var(--surface); color: var(--navy); border-color: var(--navy-edge); }
-.btn--accent:hover { background: var(--navy-tint); border-color: var(--navy); }
+.btn--accent { background: var(--surface); color: var(--fresh); border-color: var(--fresh-edge); }
+.btn--accent:hover { background: var(--fresh-tint); border-color: var(--fresh); }
 
 .btn--block { width: 100%; }
 
@@ -433,8 +421,8 @@ button { font: inherit; }
 }
 /* Tints, never solid fills — a solid brand fill means "this is a control". */
 .badge--fresh    { background: var(--fresh-tint);      color: var(--fresh-ink);  border-color: var(--fresh-edge); }
-.badge--limited  { background: var(--amber-tint);      color: var(--amber-ink);  border-color: var(--amber-edge); }
-.badge--new      { background: var(--navy-tint); color: var(--navy); border-color: var(--navy-edge); }
+.badge--limited  { background: var(--brass-tint);      color: var(--brass-ink);  border-color: var(--brass-edge); }
+.badge--new      { background: var(--brand-tint); color: var(--brand); border-color: var(--brand-edge); }
 .badge--stocked  { background: var(--surface);         color: var(--ink-2);      border-color: var(--line); }
 
 .badge .dot { width: 5px; height: 5px; border-radius: 50%; background: currentColor; flex: none; }
@@ -503,7 +491,7 @@ button { font: inherit; }
   font-family: var(--display);
   font-weight: 700;
   font-size: 2rem;
-  color: rgba(11, 122, 122, .18);
+  color: rgba(112, 44, 53, .18);
   letter-spacing: -.03em;
 }
 .pcard-flag { position: absolute; top: 8px; left: 8px; }
@@ -569,7 +557,7 @@ button { font: inherit; }
   width: 62px; height: 62px;
   border-radius: 50%;
   background: var(--surface);
-  box-shadow: inset 0 0 0 1px var(--brand-edge);
+  box-shadow: inset 0 0 0 1px var(--brass-edge);
   display: grid; place-items: center;
   color: var(--brand);
 }
@@ -600,7 +588,7 @@ button { font: inherit; }
   font-weight: 700;
   font-size: 12px;
   letter-spacing: .1em;
-  color: var(--amber-ink);
+  color: var(--brass-ink);
 }
 .step-icon { color: var(--brand); }
 .step b { font-size: var(--step-0); color: var(--brand); }
@@ -641,7 +629,7 @@ button { font: inherit; }
 .tl-step:last-child  { border-radius: 0 var(--r-sm) var(--r-sm) 0; }
 .tl-step.is-now {
   background: rgba(255, 255, 255, .13);
-  box-shadow: inset 0 2px 0 0 var(--amber);
+  box-shadow: inset 0 2px 0 0 var(--brass);
 }
 .tl-step.is-now .tl-k { color: #E8C88A; }
 .tl-k { font-size: 10px; letter-spacing: .13em; text-transform: uppercase; color: rgba(242,245,241,.6); }
@@ -657,7 +645,7 @@ button { font: inherit; }
 }
 .note--info  { background: var(--surface-2);    border-color: var(--line);           color: var(--ink-2); }
 .note--fresh { background: var(--fresh-tint);   border-color: var(--fresh-edge);     color: var(--fresh-ink); }
-.note--warn  { background: var(--amber-tint);   border-color: var(--amber-edge);     color: var(--amber-ink); }
+.note--warn  { background: var(--brass-tint);   border-color: var(--brass-edge);     color: var(--brass-ink); }
 .note--error { background: var(--error-tint);   border-color: var(--error-edge);     color: var(--error); }
 
 /* ------------------------------------------------------------------- forms */
@@ -665,7 +653,7 @@ button { font: inherit; }
   width: 100%;
   min-height: 46px;
   padding: 0 14px;
-  border: 1px solid var(--line);
+  border: 1px solid var(--line-strong);
   border-radius: var(--r-md);
   background: var(--surface);
   color: var(--ink);
@@ -680,7 +668,7 @@ button { font: inherit; }
 .qty {
   display: inline-flex;
   align-items: center;
-  border: 1px solid var(--line);
+  border: 1px solid var(--line-strong);
   border-radius: var(--r-md);
   background: var(--surface);
   overflow: hidden;
@@ -735,7 +723,7 @@ button { font: inherit; }
   border: 1px solid var(--line-soft);
   display: grid; place-items: center;
   font-family: var(--display); font-weight: 700;
-  color: rgba(11,122,122,.24);
+  color: rgba(112,44,53,.24);
   max-width: 100%;
 }
 .cline-main { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
@@ -801,7 +789,7 @@ button { font: inherit; }
   height: 16px;
   padding: 0 4px;
   border-radius: 999px;
-  background: var(--navy);
+  background: var(--brand);
   color: #fff;
   font-size: 10px;
   line-height: 16px;
@@ -821,7 +809,7 @@ button { font: inherit; }
 .foot-mark { width: 190px; margin-bottom: 14px; }
 .foot-cols { display: grid; gap: 24px; grid-template-columns: 1fr 1fr; }
 @media (min-width: 861px) { .foot-cols { grid-template-columns: 2fr 1fr 1fr 1fr; gap: 36px; } }
-.foot h3 { font-size: 11px; letter-spacing: .16em; text-transform: uppercase; color: var(--amber-ink); margin: 0 0 10px; }
+.foot h3 { font-size: 11px; letter-spacing: .16em; text-transform: uppercase; color: var(--brass-ink); margin: 0 0 10px; }
 .foot ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 7px; }
 .foot a:hover { color: var(--brand); text-decoration: underline; }
 .foot-legal { margin-top: 24px; padding-top: 18px; border-top: 1px solid var(--line); color: var(--ink-3); font-size: 11px; }
