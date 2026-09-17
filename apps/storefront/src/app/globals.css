@@ -1,27 +1,37 @@
 /* ==========================================================================
    Mylapore Bites — design system
    --------------------------------------------------------------------------
-   Palette sampled directly from the supplied logo artwork, not invented:
+   RETONED to the colour tone and feel of eatdesi.uk (reference site,
+   sampled directly from live screenshots — see
+   claude/design-eatdesi-retone.md for the full pixel-sampled readout):
 
-     #153017  forest green   — the "Mylapore" wordmark
-     #AF451F  terracotta     — the "BITES" lettering
-     #B5751F  brass          — the gopuram, the arc, the rules either side
-                               of BITES
+     #099999  teal    — their signature colour, everywhere on the page
+     #024665  navy    — the ticker strip and one deep accent surface
+     #E3A002  amber   — product-packaging gold, their eyebrow/label accent
 
-   Ground is white. The look is a clean commerce storefront: generous
-   whitespace, hairline borders, restrained colour, one strong accent.
+   Same white-ground, hairline-border commerce layout as before; what
+   changes is the accent system (was forest green / terracotta / brass,
+   sampled from the Mylapore Bites logo) and one new "feel" element, the
+   scrolling marquee ticker under the header (see .marquee below), which
+   eatdesi uses to carry short brand lines under its nav on every page.
 
-   ONE IMPORTANT CHANGE FROM THE EARLIER THEME
-   Green used to mean only "made fresh after you order". Green is now the
-   brand itself, so that hue can no longer carry the freshness signal alone.
-   Freshness is instead signalled by THREE things together — a leaf dot, the
-   words "Made to order", and a green TINT (never a solid green fill, which is
-   reserved for brand actions). Limited stock keeps brass; seasonal keeps
-   terracotta. Never fill a decorative element with solid brand green, or the
-   distinction between "this is a button" and "this is fresh" collapses.
+   THE ONE TENSION WORTH KNOWING: the actual logo artwork (logo-full.png,
+   logo-lockup.png) still shows ITS own green/terracotta/brass — that image
+   is unchanged, this file only retones the surrounding page chrome. The
+   two now sit side by side rather than sharing one palette. If that
+   mismatch reads wrong in practice, the honest fix is a recoloured logo
+   variant, not a token tweak — flagged, not solved, here.
 
-   Type echoes the logo: a high-contrast serif for display, matching the
-   wordmark, and a neutral sans for UI, matching the letterspaced lockup text.
+   ONE IMPORTANT CHANGE THIS ALSO UNDOES: the previous theme reused brand
+   green as the freshness signal too (leaf dot + "Made to order" text + a
+   green tint, never a solid fill, specifically to keep "this is a button"
+   and "this is fresh" from colliding). Now that brand is teal, freshness
+   gets its own dedicated green (--fresh) again — simpler, and the same
+   collision this avoided the first time around.
+
+   Type is unchanged: the serif display face still echoes the actual logo
+   wordmark's construction, which retoning the chrome around it doesn't
+   alter.
    ========================================================================== */
 
 :root {
@@ -36,21 +46,44 @@
   --line:        #E4E1DA;
   --line-soft:   #EFEDE7;
 
-  /* --- brand (from the logo) -------------------------------------------- */
-  --brand:       #153017;  /* wordmark green — exact */
-  --brand-ink:   #0F2411;  /* hover / pressed */
-  --brand-mid:   #2A5530;  /* icons, links that need a little lift */
-  --brand-tint:  #EDF3EE;
-  --brand-edge:  #CFDED2;
+  /* --- brand (retoned to eatdesi.uk's teal) ------------------------------ */
+  /* #099999 is their exact sampled teal, but it only measures 3.48:1 on
+     white — short of AA (4.5:1) for text and for white-on-brand fills.
+     --brand deepens it just enough to pass (5.15:1); --brand-ink is the
+     hover/pressed shade; --brand-mid is for icons and inline links, which
+     sit at the same weight. Verified with the same contrast formula used
+     for --ink-3 below, not eyeballed. */
+  --brand:       #0B7A7A;  /* 5.15:1 on white */
+  --brand-ink:   #075F5F;  /* hover / pressed — 7.47:1 */
+  --brand-mid:   #0C8888;  /* icons, links that need a little lift */
+  --brand-tint:  #E9F5F4;
+  --brand-edge:  #C7E4E2;
 
-  --terracotta:      #AF451F;  /* BITES — exact */
-  --terracotta-tint: #FBEEE9;
-  --terracotta-edge: #EBD2C7;
+  /* --- navy (their ticker-strip accent) — the one loud emphasis colour,
+     same role terracotta held before: a secondary CTA outline, a count
+     badge, never a surface fill. Passes AA both directions untouched
+     (11.57:1), so no darkening was needed. */
+  --navy:      #0B3C5C;
+  --navy-tint: #EAF0F4;
+  --navy-edge: #C7D6E0;
 
-  --brass:      #B5751F;  /* gopuram and rules — exact */
-  --brass-ink:  #8A5A14;
-  --brass-tint: #FAF2E4;
-  --brass-edge: #EBDCBE;
+  /* --- amber (their packaging gold) — same pattern as before: the raw
+     colour is for rules, dots and fills only (2.26:1 on white — nowhere
+     near AA for text); --amber-ink is the version legible as a label. */
+  --amber:      #E3A002;
+  --amber-ink:  #7A4E04;  /* 7.19:1 on white */
+  --amber-tint: #FCF3E1;
+  --amber-edge: #F0DBAF;
+
+  /* --- fresh (freed up now that brand isn't green) ----------------------- */
+  /* A plain, dedicated leaf green for the one thing this business actually
+     needs a colour for: "this was made after you ordered it." Never used
+     for anything else, so it can't collide with --brand the way reusing
+     brand-green did in the previous theme. */
+  --fresh:      #2E7D46;  /* 5.07:1 on white — passes as text unlike amber/navy raw */
+  --fresh-ink:  #1F5A32;  /* 8.18:1 — for text on the tinted --fresh-tint band */
+  --fresh-tint: #EAF5EC;
+  --fresh-edge: #CFE6D4;
 
   /* --- feedback --------------------------------------------------------- */
   --error:      #9B2C2C;
@@ -150,7 +183,7 @@ button { font: inherit; }
   font-size: 11px;
   letter-spacing: .16em;   /* matches the logo's letterspaced lockup text */
   text-transform: uppercase;
-  color: var(--brass-ink);
+  color: var(--amber-ink);
   font-weight: 600;
   margin-bottom: 4px;
 }
@@ -197,7 +230,7 @@ button { font: inherit; }
   font-weight: 700;
   letter-spacing: .3em;
   text-transform: uppercase;
-  color: var(--terracotta);
+  color: var(--navy);
   padding-left: 2px;
 }
 .brand-sub::before,
@@ -205,7 +238,7 @@ button { font: inherit; }
   content: "";
   flex: 1;
   height: 1px;
-  background: var(--brass);
+  background: var(--amber);
   opacity: .65;
   min-width: 10px;
 }
@@ -237,6 +270,50 @@ button { font: inherit; }
   .locality .locality-long { display: inline; }
 }
 
+/* ------------------------------------------------------------- marquee --- */
+/* Borrowed straight from eatdesi.uk's feel: a dark strip directly under the
+   nav, on every page, carrying short brand lines on an endless scroll. Their
+   version runs on navy; amber dots do the separating, matching their
+   product-packaging gold. Two copies of the same list sit back to back so
+   the loop has no seam — only one half ever needs to move a full width. */
+.marquee {
+  background: var(--navy);
+  color: #EAF2F6;
+  overflow: hidden;
+  white-space: nowrap;
+}
+.marquee-track {
+  display: inline-flex;
+  width: max-content;
+  animation: marquee-scroll 32s linear infinite;
+}
+.marquee-set {
+  display: inline-flex;
+  align-items: center;
+  padding-block: 9px;
+}
+.marquee-item {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: .14em;
+  text-transform: uppercase;
+  padding-inline: 18px;
+  white-space: nowrap;
+}
+.marquee-item::after {
+  content: "•";
+  margin-left: 18px;
+  color: var(--amber);
+}
+@keyframes marquee-scroll {
+  from { transform: translateX(0); }
+  to   { transform: translateX(-50%); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .marquee-track { animation: none; }
+  .marquee-set:last-child { display: none; }
+}
+
 /* -------------------------------------------------------------------- hero */
 .hero {
   position: relative;
@@ -250,7 +327,7 @@ button { font: inherit; }
   content: "";
   position: absolute;
   inset: 0;
-  background-image: radial-gradient(var(--brass) 1.2px, transparent 1.3px);
+  background-image: radial-gradient(var(--amber) 1.2px, transparent 1.3px);
   background-size: 26px 26px;
   opacity: .10;
   pointer-events: none;
@@ -274,13 +351,13 @@ button { font: inherit; }
   font-weight: 700;
   letter-spacing: .2em;
   text-transform: uppercase;
-  color: var(--brass-ink);
+  color: var(--amber-ink);
   margin-bottom: 14px;
 }
 .hero-eyebrow::before {
   content: "";
   width: 26px; height: 1px;
-  background: var(--brass);
+  background: var(--amber);
 }
 .hero h1 {
   font-family: var(--display);
@@ -332,8 +409,8 @@ button { font: inherit; }
 
 /* Terracotta is the one loud colour; it gets exactly one job — emphasis on a
    secondary call to action, never a surface fill. */
-.btn--accent { background: var(--surface); color: var(--terracotta); border-color: var(--terracotta-edge); }
-.btn--accent:hover { background: var(--terracotta-tint); border-color: var(--terracotta); }
+.btn--accent { background: var(--surface); color: var(--navy); border-color: var(--navy-edge); }
+.btn--accent:hover { background: var(--navy-tint); border-color: var(--navy); }
 
 .btn--block { width: 100%; }
 
@@ -351,10 +428,10 @@ button { font: inherit; }
   width: fit-content;
   border: 1px solid transparent;
 }
-/* Tints, never solid fills — solid brand green means "this is a control". */
-.badge--fresh    { background: var(--brand-tint);      color: var(--brand);      border-color: var(--brand-edge); }
-.badge--limited  { background: var(--brass-tint);      color: var(--brass-ink);  border-color: var(--brass-edge); }
-.badge--new      { background: var(--terracotta-tint); color: var(--terracotta); border-color: var(--terracotta-edge); }
+/* Tints, never solid fills — a solid brand fill means "this is a control". */
+.badge--fresh    { background: var(--fresh-tint);      color: var(--fresh-ink);  border-color: var(--fresh-edge); }
+.badge--limited  { background: var(--amber-tint);      color: var(--amber-ink);  border-color: var(--amber-edge); }
+.badge--new      { background: var(--navy-tint); color: var(--navy); border-color: var(--navy-edge); }
 .badge--stocked  { background: var(--surface);         color: var(--ink-2);      border-color: var(--line); }
 
 .badge .dot { width: 5px; height: 5px; border-radius: 50%; background: currentColor; flex: none; }
@@ -423,7 +500,7 @@ button { font: inherit; }
   font-family: var(--display);
   font-weight: 700;
   font-size: 2rem;
-  color: rgba(21, 48, 23, .16);
+  color: rgba(11, 122, 122, .18);
   letter-spacing: -.03em;
 }
 .pcard-flag { position: absolute; top: 8px; left: 8px; }
@@ -505,15 +582,15 @@ button { font: inherit; }
   font-weight: 700;
   font-size: 12px;
   letter-spacing: .1em;
-  color: var(--brass-ink);
+  color: var(--amber-ink);
 }
 .step-icon { color: var(--brand); }
 .step b { font-size: var(--step-0); color: var(--brand); }
 .step span { font-size: var(--step--1); color: var(--ink-2); line-height: 1.45; }
 
 /* --------------------------------------------------------------- the pledge */
-/* The pre-order promise. Deep green rather than the old near-black: it is the
-   one large brand-coloured surface on the page, so it has to be the brand. */
+/* The pre-order promise: the one large brand-coloured surface on the page,
+   so it carries the deep teal rather than a tint of it. */
 .pledge {
   background: var(--brand);
   color: #F2F5F1;
@@ -546,7 +623,7 @@ button { font: inherit; }
 .tl-step:last-child  { border-radius: 0 var(--r-sm) var(--r-sm) 0; }
 .tl-step.is-now {
   background: rgba(255, 255, 255, .13);
-  box-shadow: inset 0 2px 0 0 var(--brass);
+  box-shadow: inset 0 2px 0 0 var(--amber);
 }
 .tl-step.is-now .tl-k { color: #E8C88A; }
 .tl-k { font-size: 10px; letter-spacing: .13em; text-transform: uppercase; color: rgba(242,245,241,.6); }
@@ -561,8 +638,8 @@ button { font: inherit; }
   border: 1px solid;
 }
 .note--info  { background: var(--surface-2);    border-color: var(--line);           color: var(--ink-2); }
-.note--fresh { background: var(--brand-tint);   border-color: var(--brand-edge);     color: var(--brand); }
-.note--warn  { background: var(--brass-tint);   border-color: var(--brass-edge);     color: var(--brass-ink); }
+.note--fresh { background: var(--fresh-tint);   border-color: var(--fresh-edge);     color: var(--fresh-ink); }
+.note--warn  { background: var(--amber-tint);   border-color: var(--amber-edge);     color: var(--amber-ink); }
 .note--error { background: var(--error-tint);   border-color: var(--error-edge);     color: var(--error); }
 
 /* ------------------------------------------------------------------- forms */
@@ -640,7 +717,7 @@ button { font: inherit; }
   border: 1px solid var(--line-soft);
   display: grid; place-items: center;
   font-family: var(--display); font-weight: 700;
-  color: rgba(21,48,23,.22);
+  color: rgba(11,122,122,.24);
   max-width: 100%;
 }
 .cline-main { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
@@ -706,7 +783,7 @@ button { font: inherit; }
   height: 16px;
   padding: 0 4px;
   border-radius: 999px;
-  background: var(--terracotta);
+  background: var(--navy);
   color: #fff;
   font-size: 10px;
   line-height: 16px;
@@ -726,7 +803,7 @@ button { font: inherit; }
 .foot-mark { width: 190px; margin-bottom: 14px; }
 .foot-cols { display: grid; gap: 24px; grid-template-columns: 1fr 1fr; }
 @media (min-width: 861px) { .foot-cols { grid-template-columns: 2fr 1fr 1fr 1fr; gap: 36px; } }
-.foot h3 { font-size: 11px; letter-spacing: .16em; text-transform: uppercase; color: var(--brass-ink); margin: 0 0 10px; }
+.foot h3 { font-size: 11px; letter-spacing: .16em; text-transform: uppercase; color: var(--amber-ink); margin: 0 0 10px; }
 .foot ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 7px; }
 .foot a:hover { color: var(--brand); text-decoration: underline; }
 .foot-legal { margin-top: 24px; padding-top: 18px; border-top: 1px solid var(--line); color: var(--ink-3); font-size: 11px; }
