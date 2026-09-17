@@ -14,3 +14,8 @@ coverage/
 screenshots/
 .build/
 .wrangler/
+
+# Files delivered into the working folder by the Claude desktop app, plus the
+# git bundles used to sync commits into it. Generated, never source.
+Claude outputs/
+.mb-update.bundle
