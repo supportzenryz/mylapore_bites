@@ -314,16 +314,19 @@ button { font: inherit; }
   .marquee-set:last-child { display: none; }
 }
 
-/* -------------------------------------------------------------------- hero */
-.hero {
+/* ------------------------------------------------------- category opener --- */
+/* There is no hero any more. The category drawings are the first thing on the
+   page, so this section carries what the hero used to: a short statement of
+   what this is, then the whole range as pictures. The kolam dot grid — the
+   pattern chalked at Mylapore doorsteps — stays on as the faintest texture. */
+.catlead {
   position: relative;
   background: var(--surface);
   border-bottom: 1px solid var(--line);
   overflow: hidden;
+  padding-block: 30px 34px;
 }
-/* The kolam, kept from the previous theme but muted to a texture: the dot
-   grid chalked at Mylapore doorsteps, now in the faintest brass. */
-.hero::before {
+.catlead::before {
   content: "";
   position: absolute;
   inset: 0;
@@ -332,15 +335,12 @@ button { font: inherit; }
   opacity: .10;
   pointer-events: none;
 }
-.hero-inner {
-  position: relative;
-  display: grid;
-  gap: 26px;
-  padding-block: 36px 40px;
-  align-items: center;
-}
+.catlead > .wrap { position: relative; }
+
+.catlead-head { margin-bottom: 24px; }
 @media (min-width: 861px) {
-  .hero-inner { grid-template-columns: 1.05fr .95fr; padding-block: 56px 60px; gap: 40px; }
+  .catlead { padding-block: 44px 48px; }
+  .catlead-head { margin-bottom: 32px; }
 }
 
 .hero-eyebrow {
@@ -352,37 +352,40 @@ button { font: inherit; }
   letter-spacing: .2em;
   text-transform: uppercase;
   color: var(--amber-ink);
-  margin-bottom: 14px;
+  margin-bottom: 12px;
 }
 .hero-eyebrow::before {
   content: "";
   width: 26px; height: 1px;
   background: var(--amber);
 }
-.hero h1 {
+.catlead-head h1 {
   font-family: var(--display);
   font-weight: 700;
   font-size: var(--step-4);
   line-height: 1.06;
   letter-spacing: -0.02em;
-  margin: 0 0 12px;
+  margin: 0 0 10px;
   text-wrap: balance;
-  max-width: 14ch;
+  max-width: 16ch;
   color: var(--brand);
 }
-.hero p {
-  margin: 0 0 24px;
-  max-width: 42ch;
+.catlead-head p {
+  margin: 0;
+  max-width: 46ch;
   color: var(--ink-2);
   font-size: var(--step-1);
 }
-.hero-actions { display: flex; flex-wrap: wrap; gap: 10px; }
 
-.hero-mark {
-  justify-self: center;
-  width: min(258px, 62vw);
+/* Three across on a phone — small enough to fit the whole range on one or two
+   screens, big enough that each drawing still reads. */
+.catgrid {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(3, 1fr);
 }
-@media (min-width: 861px) { .hero-mark { width: min(400px, 38vw); } }
+@media (min-width: 560px) { .catgrid { grid-template-columns: repeat(4, 1fr); gap: 14px; } }
+@media (min-width: 861px) { .catgrid { grid-template-columns: repeat(5, 1fr); gap: 16px; } }
 
 /* ----------------------------------------------------------------- buttons */
 .btn {
@@ -541,25 +544,40 @@ button { font: inherit; }
 .price small { font-weight: 500; color: var(--ink-3); font-size: 11px; }
 
 /* ------------------------------------------------------------ category tile */
+/* The drawing is the point of this tile, so it gets the room: a white disc to
+   sit on (the amber washes inside the illustrations need a neutral ground, not
+   a tint that fights them) ringed in brand tint, which is also what the hover
+   state thickens rather than adding a shadow the grid doesn't need. */
 .ctile {
   display: flex;
   flex-direction: column;
-  gap: 7px;
+  gap: 8px;
   align-items: center;
   text-align: center;
-  padding: 16px 8px;
+  padding: 16px 8px 14px;
   background: var(--surface);
   border: 1px solid var(--line);
   border-radius: var(--r-md);
-  transition: border-color .18s, box-shadow .18s;
+  transition: border-color .18s, box-shadow .18s, transform .18s;
 }
-.ctile:hover { border-color: var(--brand-edge); box-shadow: var(--shadow-card); }
+.ctile:hover {
+  border-color: var(--brand-edge);
+  box-shadow: var(--shadow-card);
+  transform: translateY(-2px);
+}
 .ctile-glyph {
-  width: 46px; height: 46px;
+  width: 62px; height: 62px;
   border-radius: 50%;
-  background: var(--brand-tint);
+  background: var(--surface);
+  box-shadow: inset 0 0 0 1px var(--brand-edge);
   display: grid; place-items: center;
   color: var(--brand);
+}
+.ctile-glyph svg { width: 34px; height: 34px; }
+@media (min-width: 861px) {
+  .ctile { padding: 20px 10px 16px; }
+  .ctile-glyph { width: 72px; height: 72px; }
+  .ctile-glyph svg { width: 40px; height: 40px; }
 }
 .ctile-name { font-weight: 600; font-size: var(--step--1); line-height: 1.25; }
 .ctile-count { font-size: 11px; color: var(--ink-3); }

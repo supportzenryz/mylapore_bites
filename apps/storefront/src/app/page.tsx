@@ -65,29 +65,26 @@ export default async function HomePage() {
       <Masthead locality="Mylapore, Chennai" />
 
       <main>
-        {/* 1 — Hero. Copy comes from settings, so the owner can change it. */}
-        <section className="hero">
-          <div className="wrap hero-inner">
-            <div>
+        {/* 1 — Categories open the page. With no hero above them, the drawings
+            carry the first screen: what we make, said in pictures. */}
+        <section className="catlead">
+          <div className="wrap">
+            <div className="catlead-head">
               <span className="hero-eyebrow">Taste Tradition At Home</span>
               <h1>{content.hero.headline}</h1>
               <p>{content.hero.subhead}</p>
-              <div className="hero-actions">
-                <Link href="/shop" className="btn btn--primary">{content.hero.primaryCta}</Link>
-                <Link href="/how-it-works" className="btn btn--accent">How it works</Link>
-              </div>
             </div>
-            {/* The logo carries the hero: the temple, the leaf and the wordmark
-                say more about who cooks this than a stock food photograph. */}
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              className="hero-mark"
-              src="/logo-full.png"
-              alt="Mylapore Bites"
-              width={760}
-              height={757}
-              fetchPriority="high"
-            />
+            <div className="catgrid">
+              {categories.map((c) => (
+                <Link key={c.id} href={`/shop?category=${c.slug}`} className="ctile">
+                  <span className="ctile-glyph"><CategoryGlyph slug={c.slug} /></span>
+                  <span className="ctile-name">{c.name}</span>
+                  <span className="ctile-count">
+                    {c.productCount} {c.productCount === 1 ? "item" : "items"}
+                  </span>
+                </Link>
+              ))}
+            </div>
           </div>
         </section>
 
@@ -118,22 +115,6 @@ export default async function HomePage() {
               <p className="subtle" style={{ margin: "10px 0 0", color: "rgba(242,245,241,.52)" }}>
                 Example timings. Each item shows its own cut-off and delivery days.
               </p>
-            </div>
-          </section>
-
-          {/* 3 — Categories */}
-          <section className="section">
-            <SectionHead eyebrow="Browse" title="What we make" href="/shop" />
-            <div className="grid">
-              {categories.slice(0, 8).map((c) => (
-                <Link key={c.id} href={`/shop?category=${c.slug}`} className="ctile">
-                  <span className="ctile-glyph"><CategoryGlyph slug={c.slug} /></span>
-                  <span className="ctile-name">{c.name}</span>
-                  <span className="ctile-count">
-                    {c.productCount} {c.productCount === 1 ? "item" : "items"}
-                  </span>
-                </Link>
-              ))}
             </div>
           </section>
 
